@@ -2,6 +2,7 @@ import { postJson } from '../lib/api.js'
 
 export function useTags({ error, tagDraft, saving, freshToken, group, flash, tagDeleteTarget }) {
   async function saveTag() {
+    if (saving.value) return
     error.value = ''
     if (!tagDraft.name.trim()) {
       error.value = 'Escribe un nombre para la etiqueta.'
@@ -19,6 +20,7 @@ export function useTags({ error, tagDraft, saving, freshToken, group, flash, tag
   }
 
   async function removeTag() {
+    if (saving.value) return
     if (!tagDeleteTarget.value) return
     saving.value = true
     try {

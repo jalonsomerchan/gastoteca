@@ -20,6 +20,7 @@ export function useGroup({
   loadNotifications,
 }) {
   async function invite() {
+    if (inviteSending.value) return
     const email = inviteEmail.value.trim()
     error.value = ''
     inviteSending.value = true
@@ -36,6 +37,7 @@ export function useGroup({
   }
 
   async function saveGroupSettings() {
+    if (saving.value) return
     saving.value = true
     error.value = ''
     try {
@@ -55,6 +57,7 @@ export function useGroup({
   }
 
   async function saveCatalogIcons() {
+    if (saving.value) return
     error.value = ''
     const allIcons = [...catalogDraft.establishments, ...catalogDraft.categories]
     if (allIcons.some((item) => !/^[a-z0-9][a-z0-9-]*:[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(item.icon))) {
@@ -78,8 +81,11 @@ export function useGroup({
   }
 
   async function joinGroup() {
+    if (saving.value) return
+    saving.value = true
+    error.value = ''
     try {
-      const data = await postJson('gastoteca/join_group', await freshToken(true), { invite_code: joinCode.value })
+      const data = await postJson('gastoteca/join_group', await freshToken(true), { invite_code: joinCode.value.trim().toUpperCase() })
       group.value = data.group
       expenses.value = data.expenses
       stats.value = data.stats
@@ -88,9 +94,13 @@ export function useGroup({
       await loadNotifications()
       flash('Ya formas parte del grupo.')
     } catch (reason) { error.value = reason.message }
+    finally { saving.value = false }
   }
 
   async function leaveGroup() {
+    if (saving.value) return
+    saving.value = true
+    error.value = ''
     try {
       const data = await postJson('gastoteca/leave_group', await freshToken(true), {})
       group.value = data.group
@@ -100,6 +110,7 @@ export function useGroup({
       await loadNotifications()
       flash('Has creado un nuevo grupo personal.')
     } catch (reason) { error.value = reason.message }
+    finally { saving.value = false }
   }
 
   return { invite, saveGroupSettings, prepareCatalogDraft, saveCatalogIcons, joinGroup, leaveGroup }

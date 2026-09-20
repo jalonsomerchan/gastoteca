@@ -32,7 +32,7 @@ const {
     </div>
   </section>
   <section class="settings-layout">
-    <form class="feature-panel feature-form settings-panel" @submit.prevent="saveNotificationSettings">
+    <form class="feature-panel feature-form settings-panel" aria-label="Preferencias de notificaciones de la aplicación" :aria-busy="notificationSaving" @submit.prevent="saveNotificationSettings">
       <div class="feature-panel-heading">
         <div>
           <p class="eyebrow">
@@ -50,12 +50,12 @@ const {
       </div>
       <div class="feature-form-actions">
         <span></span><button class="primary" :disabled="notificationSaving">
-          <PhCheck :size="17" /> {{ notificationSaving ? 'Guardando…' : 'Guardar preferencias' }}
+          <PhCheck aria-hidden="true" :size="17" /> {{ notificationSaving ? 'Guardando…' : 'Guardar avisos de la app' }}
         </button>
       </div>
     </form>
 
-    <form class="feature-panel feature-form settings-panel" @submit.prevent="saveTelegramSettings">
+    <form class="feature-panel feature-form settings-panel" aria-label="Preferencias de Telegram" :aria-busy="telegramSaving" @submit.prevent="saveTelegramSettings">
       <div class="feature-panel-heading">
         <div>
           <p class="eyebrow">
@@ -84,7 +84,7 @@ const {
              target="_blank"
              rel="noreferrer"
           >
-            Abrir Telegram para vincular <PhArrowRight :size="15" />
+            Abrir Telegram para vincular <span class="sr-only">(se abre en otra pestaña)</span><PhArrowRight aria-hidden="true" :size="15" />
           </a>
           <button v-if="!telegramConnected && telegramLinkUrl"
                   type="button"
@@ -108,7 +108,7 @@ const {
         </div>
         <div class="feature-form-actions">
           <span></span><button class="primary" :disabled="telegramSaving">
-            <PhCheck :size="17" /> {{ telegramSaving ? 'Guardando…' : 'Guardar preferencias' }}
+            <PhCheck aria-hidden="true" :size="17" /> {{ telegramSaving ? 'Guardando…' : 'Guardar avisos de Telegram' }}
           </button>
         </div>
       </template>
@@ -126,7 +126,7 @@ const {
         <span class="avatar">{{ (user?.displayName || user?.email || 'U').slice(0, 1).toUpperCase() }}</span><div><strong>{{ user?.displayName || 'Tu cuenta' }}</strong><small>{{ user?.email }}</small></div>
       </div>
       <div class="settings-account-row">
-        <span class="settings-group-icon"><PhUsers :size="19" /></span><div><strong>{{ group?.name || 'Tu grupo' }}</strong><small>{{ memberOptions.length }} {{ memberOptions.length === 1 ? 'persona' : 'personas' }}</small></div><button type="button" class="ghost small-action" @click="navigateTo('/grupo')">
+        <span class="settings-group-icon"><PhUsers aria-hidden="true" :size="19" /></span><div><strong>{{ group?.name || 'Tu grupo' }}</strong><small>{{ memberOptions.length }} {{ memberOptions.length === 1 ? 'persona' : 'personas' }}</small></div><button type="button" class="ghost small-action" @click="navigateTo('/grupo')">
           Ver grupo
         </button>
       </div>

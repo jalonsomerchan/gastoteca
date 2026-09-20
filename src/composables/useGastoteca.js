@@ -1,7 +1,7 @@
 import { useGroupCatalogs } from './useGroupCatalogs.js'
 import { createGastotecaState } from '../state/createGastotecaState.js'
 import { useRoute, useRouter } from 'vue-router'
-import { computed, watch, onBeforeUnmount, onMounted } from 'vue'
+import { computed, ref, watch, onBeforeUnmount, onMounted } from 'vue'
 import { notificationOptions, paymentMethods, paymentMethodLabel } from '../domain/catalogs.js'
 import { money, dateLabel, notificationDateLabel, monthLabel, expenseLocation } from '../utils/formatters.js'
 import { getJson, postJson } from '../lib/api.js'
@@ -84,6 +84,7 @@ export function useGastoteca() {
     draft,
     recurringDraft,
   } = createGastotecaState()
+  const routeLoadFailed = ref(false)
   let expenseObserver = null
   let routeDataRequestId = 0
   let notificationsPollTimer = null
@@ -106,7 +107,7 @@ export function useGastoteca() {
   function flash(message) {
     notice.value = message
     window.clearTimeout(noticeTimer)
-    noticeTimer = window.setTimeout(() => { if (notice.value === message) notice.value = '' }, 3200)
+    noticeTimer = window.setTimeout(() => { if (notice.value === message) notice.value = '' }, 8000)
   }
 
   function clearFilters() {
@@ -290,9 +291,7 @@ export function useGastoteca() {
     loadNotifications,
   })
 
-  watch(() => draft.transaction_type, (transactionType) => {
-    if (transactionType && !draft.id && !quickExpenseMode.value) detectCurrentCity()
-  })
+  // Location is requested only from the explicit 'Usar mi ubicación' action.
 
   async function freshToken(force = false) {
     if (!user.value) throw new Error('Debes iniciar sesión.')
@@ -305,6 +304,7 @@ export function useGastoteca() {
 
     const requestId = ++routeDataRequestId
     routeLoading.value = true
+    routeLoadFailed.value = false
     error.value = ''
 
     try {
@@ -342,7 +342,10 @@ export function useGastoteca() {
       }
       await loadNotifications()
     } catch (reason) {
-      if (requestId === routeDataRequestId && route.name === routeName) error.value = reason.message
+      if (requestId === routeDataRequestId && route.name === routeName) {
+        error.value = reason.message
+        routeLoadFailed.value = true
+      }
     } finally {
       if (requestId === routeDataRequestId) routeLoading.value = false
     }
@@ -367,7 +370,7 @@ export function useGastoteca() {
     notificationsOpen.value = false
     error.value = ''
     if (route.name === 'establishments' || route.name === 'categories') prepareCatalogDraft()
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: 'instant' })
     if (user.value) loadRouteData(route.name)
   })
 
@@ -410,7 +413,7 @@ export function useGastoteca() {
 
   watch(loadMoreSentinel, (element) => {
     expenseObserver?.disconnect()
-    if (!element) return
+    if (!element || typeof IntersectionObserver === 'undefined') return
     expenseObserver = new IntersectionObserver((entries) => {
       if (entries[0]?.isIntersecting && hasMoreExpenses.value) visibleExpenseCount.value += 20
     }, { rootMargin: '300px 0px' })
@@ -446,7 +449,7 @@ export function useGastoteca() {
   }
 
   function handleHeaderEscape(event) {
-    if (event.key !== 'Escape') return
+    if (event.key !== 'Escape' || event.defaultPrevented || document.querySelector('dialog[open]')) return
     if (iconPickerOpen.value) {
       closeIconPicker()
       return
@@ -504,6 +507,9 @@ export function useGastoteca() {
     }
   })
   return {
+    routeLoadFailed,
+    retryRouteLoad: () => loadRouteData(route.name),
+    loadMoreExpenses: () => { visibleExpenseCount.value += 20 },
     signOut,
     route,
     router,

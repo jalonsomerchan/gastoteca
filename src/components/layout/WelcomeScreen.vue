@@ -4,16 +4,15 @@ import { PhCoins, PhGoogleLogo } from '@phosphor-icons/vue'
 
 const {
   signingIn,
-  
   error,
   login,
 } = useGastotecaContext()
 </script>
 
 <template>
-  <main class="welcome">
+  <main id="main-content" class="welcome" tabindex="-1">
     <div class="welcome-art">
-      <PhCoins :size="64" weight="duotone" />
+      <PhCoins aria-hidden="true" :size="64" weight="duotone" />
     </div>
     <p class="eyebrow">
       GASTOS COMPARTIDOS, SIN LÍOS
@@ -21,9 +20,9 @@ const {
     <h1>Todo lo que gastáis.<br /><em>Claro para todos.</em></h1>
     <p>Guarda los gastos del grupo, reparte cada compra entre quien corresponda y entiende en qué se va el dinero.</p>
     <button class="primary big" :disabled="signingIn" @click="login">
-      <PhGoogleLogo :size="20" weight="bold" /> {{ signingIn ? 'Conectando…' : 'Continuar con Google' }}
+      <PhGoogleLogo aria-hidden="true" :size="20" weight="bold" /> {{ signingIn ? 'Conectando…' : 'Continuar con Google' }}
     </button>
-    <p v-if="error" class="inline-error">
+    <p v-if="error" class="inline-error" role="alert">
       {{ error }}
     </p>
   </main>

@@ -1,3 +1,4 @@
+import { isPositiveAmount, splitValidation } from '../domain/validation.js'
 import { postJson } from '../lib/api.js'
 import { historyFieldLabels, paymentMethodLabel } from '../domain/catalogs.js'
 import { money, dateLabel, normalizeName } from '../utils/formatters.js'
@@ -107,6 +108,7 @@ export function useExpenses({
   }
 
   async function saveQuickExpense() {
+    if (saving.value) return
     error.value = ''
     const amount = Number(quickAmount.value)
     if (!Number.isFinite(amount) || amount <= 0 || amount > 99999999) {
@@ -216,12 +218,13 @@ export function useExpenses({
   }
 
   async function saveExpense() {
+    if (saving.value) return
     error.value = ''
     if (!draft.transaction_type) {
       error.value = 'Selecciona si es un gasto o un ingreso.'
       return
     }
-    if (!draft.name.trim() || !draft.amount || Number(draft.amount) <= 0) {
+    if (!draft.name.trim() || !isPositiveAmount(draft.amount)) {
       error.value = 'Añade un nombre y un importe mayor que cero.'
       return
     }
@@ -232,6 +235,14 @@ export function useExpenses({
     if (draft.share_mode !== 'equal' && !splitMembers.value.length) {
       error.value = 'Selecciona participantes antes de personalizar el reparto.'
       return
+    }
+    if (draft.paid_by_type === 'person' && !memberOptions.value.some(member => member.uid === draft.paid_by_uid)) {
+      error.value = 'Selecciona quién ha pagado o recibido el movimiento.'
+      return
+    }
+    if (draft.share_mode !== 'equal') {
+      error.value = splitValidation(splitMembers.value.map((member, index) => shareValue(member, index)), draft.share_mode === 'percent' ? 100 : draft.amount, draft.share_mode === 'percent')
+      if (error.value) return
     }
     saving.value = true
     try {
@@ -258,6 +269,7 @@ export function useExpenses({
   }
 
   async function removeExpense() {
+    if (saving.value) return
     const target = deleteTarget.value
     if (!target) return
     const movement = target.transaction_type === 'income' ? 'Ingreso' : 'Gasto'

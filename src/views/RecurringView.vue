@@ -1,4 +1,5 @@
 <script setup>
+import { focusElement } from '../utils/focus.js'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
 import { PhCheck, PhLightning } from '@phosphor-icons/vue'
 
@@ -12,7 +13,6 @@ const {
   memberOptions,
   recurringDraft,
   recurringSplitMembers,
-  
   money,
   dateLabel,
   toggleRecurring,
@@ -39,7 +39,7 @@ const {
     </button>
   </section>
   <section class="feature-layout">
-    <form class="feature-panel feature-form" @submit.prevent="saveRecurring">
+    <form :aria-busy="saving" class="feature-panel feature-form" @submit.prevent="saveRecurring">
       <div class="feature-panel-heading">
         <div>
           <p class="eyebrow">
@@ -47,6 +47,7 @@ const {
           </p><h2>{{ recurringDraft.id ? 'Ajusta los detalles' : 'Añade un movimiento' }}</h2>
         </div>
       </div>
+      <p class="required-hint">Los campos con * son obligatorios.</p>
       <div class="feature-fields">
         <label><span>Tipo *</span><select v-model="recurringDraft.transaction_type" required>
           <option value="expense">Gasto</option><option value="income">Ingreso</option>
@@ -55,7 +56,7 @@ const {
           <option value="weekly">Cada semana</option><option value="monthly">Cada mes</option><option value="yearly">Cada año</option>
         </select></label>
         <label class="feature-field-wide">
-          <span>Nombre *</span><input v-model="recurringDraft.name"
+          <span>Nombre *</span><input id="recurring-name" v-model="recurringDraft.name"
                                       maxlength="160"
                                       :placeholder="recurringDraft.transaction_type === 'income' ? 'Nómina o ingreso recurrente' : 'Alquiler, suscripción…'"
                                       required
@@ -63,7 +64,7 @@ const {
         </label>
         <label><span>Importe *</span><div class="money-input">
           <input v-model="recurringDraft.amount"
-                 type="number"
+                 type="number" inputmode="decimal"
                  min="0.01"
                  max="99999999"
                  step="0.01"
@@ -86,9 +87,9 @@ const {
       <fieldset class="feature-fieldset">
         <legend>{{ recurringDraft.transaction_type === 'income' ? 'Quién lo recibe' : 'Quién lo paga' }} *</legend>
         <div class="feature-choice-row">
-          <label><input v-model="recurringDraft.paid_by_type" type="radio" value="person" /> Una persona</label><label><input v-model="recurringDraft.paid_by_type" type="radio" value="all" /> Todo el grupo</label>
+          <label><input v-model="recurringDraft.paid_by_type" type="radio" name="recurringDraft-paid_by_type" value="person" /> Una persona</label><label><input v-model="recurringDraft.paid_by_type" type="radio" name="recurringDraft-paid_by_type" value="all" /> Todo el grupo</label>
         </div>
-        <select v-if="recurringDraft.paid_by_type === 'person'" v-model="recurringDraft.paid_by_uid" class="feature-select">
+        <select v-if="recurringDraft.paid_by_type === 'person'" v-model="recurringDraft.paid_by_uid" class="feature-select" aria-label="Persona que paga o recibe el movimiento" required>
           <option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option>
         </select>
       </fieldset>
@@ -96,11 +97,11 @@ const {
         <legend>A quién se aplica *</legend>
         <div class="feature-choice-row">
           <label><input v-model="recurringDraft.applies_to_all"
-                        type="radio"
+                        type="radio" name="recurringDraft-applies_to_all"
                         :value="true"
                         @change="resetRecurringShares"
           /> Todo el grupo</label><label><input v-model="recurringDraft.applies_to_all"
-                                                type="radio"
+                                                type="radio" name="recurringDraft-applies_to_all"
                                                 :value="false"
                                                 @change="resetRecurringShares"
           /> Algunas personas</label>
@@ -115,13 +116,13 @@ const {
           </label>
         </div>
         <div class="feature-split-heading">
-          <span>Reparto *</span><label><input :checked="recurringDraft.share_mode === 'equal'" type="radio" @change="setRecurringShareMode('equal')" /> Por igual</label><label><input :checked="recurringDraft.share_mode === 'amount'" type="radio" @change="setRecurringShareMode('amount')" /> Personalizado</label>
+          <span>Reparto *</span><label><input :checked="recurringDraft.share_mode === 'equal'" type="radio" name="recurringDraft-share_mode" @change="setRecurringShareMode('equal')" /> Por igual</label><label><input :checked="recurringDraft.share_mode === 'amount'" type="radio" name="recurringDraft-share_mode" @change="setRecurringShareMode('amount')" /> Personalizado</label>
         </div>
         <div v-if="recurringDraft.share_mode === 'amount'" class="feature-share-list">
           <label v-for="member in recurringSplitMembers" :key="member.uid">
             <span>{{ member.name || member.email }}</span><div class="money-input">
               <input v-model="recurringDraft.participant_shares[member.uid]"
-                     type="number"
+                     type="number" inputmode="decimal"
                      min="0"
                      step="0.01"
                      :aria-label="`Parte de ${member.name || member.email}`"
@@ -152,7 +153,7 @@ const {
         >
           Cancelar
         </button><button class="primary" :disabled="saving">
-          <PhCheck :size="17" /> {{ saving ? 'Guardando…' : 'Guardar' }}
+          <PhCheck aria-hidden="true" :size="17" /> {{ saving ? 'Guardando…' : 'Guardar programación' }}
         </button>
       </div>
     </form>
@@ -170,16 +171,16 @@ const {
             <span class="feature-status-dot" :class="{ paused: !rule.active }"></span><div><strong>{{ rule.name }}</strong><small>{{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ money(rule.amount) }} · {{ paymentMethodLabel(rule.payload?.payment_method) }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }}</small><small>{{ rule.active ? 'Próximo: ' : 'Pausado · Próximo: ' }}{{ dateLabel(rule.next_at) }}</small></div>
           </div>
           <div class="feature-row-actions">
-            <button type="button" class="ghost small-action" @click="startRecurringRule(rule)">
+            <button type="button" class="ghost small-action" @click="startRecurringRule(rule); focusElement('#recurring-name')" :aria-label="`Editar programación ${rule.name}`">
               Editar
-            </button><button type="button" class="secondary small-action" @click="toggleRecurring(rule)">
+            </button><button type="button" class="secondary small-action" @click="toggleRecurring(rule)" :disabled="saving" :aria-label="`${rule.active ? 'Pausar' : 'Reactivar'} programación ${rule.name}`">
               {{ rule.active ? 'Pausar' : 'Reactivar' }}
             </button>
           </div>
         </article>
       </div>
       <div v-else class="feature-empty">
-        <PhLightning :size="27" /><strong>Aún no hay programaciones</strong><p>Configura aquí el alquiler, las suscripciones o los ingresos que se repiten.</p>
+        <PhLightning aria-hidden="true" :size="27" /><strong>Aún no hay programaciones</strong><p>Configura aquí el alquiler, las suscripciones o los ingresos que se repiten.</p>
       </div>
     </section>
   </section>

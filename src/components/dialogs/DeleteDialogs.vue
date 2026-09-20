@@ -4,6 +4,7 @@ import ConfirmDialog from './ConfirmDialog.vue'
 
 const {
   saving,
+  error,
   deleteTarget,
   recurringDeleteTarget,
   tagDeleteTarget,
@@ -19,6 +20,7 @@ const {
     title-id="recurring-delete-title"
     title="Eliminar programación"
     :saving="saving"
+    :error="error"
     @cancel="recurringDeleteTarget = null"
     @confirm="removeRecurring"
   >
@@ -29,6 +31,7 @@ const {
     title-id="tag-delete-title"
     title="Eliminar etiqueta"
     :saving="saving"
+    :error="error"
     @cancel="tagDeleteTarget = null"
     @confirm="removeTag"
   >
@@ -39,6 +42,7 @@ const {
     title-id="expense-delete-title"
     title="Eliminar movimiento"
     :saving="saving"
+    :error="error"
     @cancel="deleteTarget = null"
     @confirm="removeExpense"
   >

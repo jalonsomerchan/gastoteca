@@ -1,34 +1,36 @@
 <script setup>
+import BaseDialog from './BaseDialog.vue'
+import FormError from '../forms/FormError.vue'
 import { PhTrash } from '@phosphor-icons/vue'
 
 defineProps({
   titleId: { type: String, required: true },
   title: { type: String, required: true },
+  error: { type: String, default: '' },
+  confirmLabel: { type: String, default: 'Sí, eliminar' },
   saving: { type: Boolean, default: false },
 })
 defineEmits(['cancel', 'confirm'])
 </script>
 
 <template>
-  <div class="modal-backdrop" @mousedown.self="$emit('cancel')">
+  <BaseDialog :labelled-by="titleId" :described-by="`${titleId}-description`" :busy="saving" @close="$emit('cancel')">
     <section class="confirm-dialog"
-             role="dialog"
-             aria-modal="true"
-             :aria-labelledby="titleId"
     >
-      <span class="danger-mark"><PhTrash :size="25" /></span>
+      <span class="danger-mark"><PhTrash aria-hidden="true" :size="25" /></span>
       <p :id="titleId" class="eyebrow modal-title">
         {{ title }}
       </p>
-      <p><slot /></p>
+      <p :id="`${titleId}-description`"><slot /></p>
+      <FormError :message="error" />
       <div>
-        <button class="ghost" @click="$emit('cancel')">
+        <button type="button" class="ghost" data-initial-focus :disabled="saving" @click="$emit('cancel')">
           Cancelar
         </button>
-        <button class="danger-button" :disabled="saving" @click="$emit('confirm')">
-          Sí, eliminar
+        <button type="button" class="danger-button" :disabled="saving" @click="$emit('confirm')">
+          {{ saving ? 'Guardando…' : confirmLabel }}
         </button>
       </div>
     </section>
-  </div>
+  </BaseDialog>
 </template>

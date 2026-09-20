@@ -14,6 +14,7 @@ export function useNotificationSettings({
   telegramUsername,
 }) {
   async function saveTelegramSettings() {
+    if (telegramSaving.value) return
     telegramSaving.value = true
     error.value = ''
     try {
@@ -25,6 +26,7 @@ export function useNotificationSettings({
   }
 
   async function saveNotificationSettings() {
+    if (notificationSaving.value) return
     notificationSaving.value = true
     error.value = ''
     try {

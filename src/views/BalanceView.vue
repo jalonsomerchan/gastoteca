@@ -4,7 +4,6 @@ import { PhArrowLeft } from '@phosphor-icons/vue'
 
 const {
   router,
-  
   settlements,
   group,
   paymentMethodLabel,
@@ -27,7 +26,7 @@ const {
       </p><h1>Balance</h1><p>Desglose de los gastos que has adelantado y los que te corresponden.</p>
     </div>
     <button type="button" class="ghost" @click="router.push({ name: 'expenses' })">
-      <PhArrowLeft :size="17" /> Volver a movimientos
+      <PhArrowLeft aria-hidden="true" :size="17" /> Volver a movimientos
     </button>
   </section>
   <section class="balance-card balance-detail-total" :class="netBalance < 0 ? 'balance-negative' : 'balance-positive'">

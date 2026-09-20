@@ -1,11 +1,14 @@
 <script setup>
+import { ref } from 'vue'
+import ConfirmDialog from '../components/dialogs/ConfirmDialog.vue'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
-import { PhHouse, PhArrowRight } from '@phosphor-icons/vue'
+import { PhHouse, PhArrowRight, PhX } from '@phosphor-icons/vue'
 import Multiselect from '@vueform/multiselect'
 
 const {
   router,
   saving,
+  error,
   user,
   group,
   inviteEmail,
@@ -24,6 +27,21 @@ const {
   joinGroup,
   leaveGroup,
 } = useGastotecaContext()
+const groupAction = ref('')
+const copyStatus = ref('')
+async function copyInviteCode() {
+  try {
+    await navigator.clipboard.writeText(group.value?.invite_code || '')
+    copyStatus.value = 'Código copiado.'
+  } catch {
+    copyStatus.value = 'No se ha podido copiar. Selecciona el código y cópialo manualmente.'
+  }
+}
+async function confirmGroupAction() {
+  if (groupAction.value === 'join') await joinGroup()
+  else await leaveGroup()
+  if (!error.value) groupAction.value = ''
+}
 </script>
 
 <template>
@@ -36,7 +54,7 @@ const {
   </section>
   <section class="group-grid">
     <article class="group-card group-hero">
-      <span class="group-mark"><PhHouse :size="28" weight="duotone" /></span><div>
+      <span class="group-mark"><PhHouse aria-hidden="true" :size="28" weight="duotone" /></span><div>
         <p class="eyebrow">
           GRUPO ACTUAL
         </p><h2>{{ group?.name }}</h2><p>
@@ -46,6 +64,8 @@ const {
         </p>
       </div><div class="invite-code">
         <span>Código de invitación</span><strong>{{ group?.invite_code }}</strong>
+        <button type="button" class="secondary small-action" @click="copyInviteCode">Copiar código</button>
+        <span role="status">{{ copyStatus }}</span>
       </div>
     </article>
     <article class="group-card">
@@ -62,15 +82,15 @@ const {
         INVITAR
       </p><h2>Sumar una persona</h2><p class="muted">
         Enviaremos un correo. Al iniciar sesión con Google usando ese email, se unirá automáticamente.
-      </p><form class="inline-form" @submit.prevent="invite">
+      </p><form class="inline-form" :aria-busy="inviteSending" @submit.prevent="invite">
         <label class="inline-form-field">
           <span>Correo electrónico *</span><input v-model="inviteEmail"
-                                                  type="email"
+                                                  type="email" autocomplete="email" inputmode="email"
                                                   placeholder="persona@ejemplo.com"
                                                   required
           />
         </label><button class="primary" :disabled="inviteSending">
-          {{ inviteSending ? 'Enviando…' : 'Invitar' }} <PhArrowRight :size="17" />
+          {{ inviteSending ? 'Enviando…' : 'Invitar' }} <PhArrowRight aria-hidden="true" :size="17" />
         </button>
       </form><div v-if="group.pending_emails?.length" class="pending">
         <span v-for="email in group.pending_emails" :key="email">{{ email }} · pendiente</span>
@@ -79,22 +99,24 @@ const {
     <article v-if="group?.owner_uid === user.uid" class="group-card">
       <p class="eyebrow">
         UBICACIÓN
-      </p><h2>Ciudad predeterminada</h2><p class="muted">
+      </p><h2 id="group-city-label">Ciudad predeterminada</h2><p class="muted">
         Se usará cuando no podamos detectar la ubicación del dispositivo.
       </p><form class="group-setting-form" @submit.prevent="saveGroupSettings">
-        <Multiselect v-model="defaultCityDraft"
+        <Multiselect id="group-city-select" v-model="defaultCityDraft"
                      class="smart-select"
                      :options="cityOptions"
                      searchable
                      create-option
                      allow-absent
                      :can-clear="Boolean(defaultCityDraft)"
-                     :aria="{ 'aria-label': 'Ciudad predeterminada' }"
+                     :aria="{ 'aria-label': 'Ciudad predeterminada', 'aria-labelledby': 'group-city-label' }"
                      placeholder="Escribe o busca una ciudad"
                      no-options-text="Escribe una ciudad nueva"
                      no-results-text="Sin coincidencias"
-        /><button class="primary" :disabled="saving">
-          Guardar
+        >
+              <template #clear="{ clear }"><button type="button" class="accessible-select-clear" aria-label="Borrar ciudad predeterminada" @mousedown.prevent @click.stop="clear"><PhX aria-hidden="true" :size="18" /></button></template>
+            </Multiselect><button class="primary" :disabled="saving">
+          Guardar ciudad
         </button>
       </form>
     </article>
@@ -107,7 +129,7 @@ const {
         <select v-model="defaultPaymentMethodDraft" aria-label="Método de pago predeterminado">
           <option v-for="method in paymentMethods" :key="method.value" :value="method.value">{{ method.label }}</option>
         </select><button class="primary" :disabled="saving">
-          Guardar
+          Guardar método de pago
         </button>
       </form>
     </article>
@@ -123,7 +145,7 @@ const {
       </div>
       <div v-if="group?.recurring?.length" class="recurring-list">
         <div v-for="rule in group.recurring" :key="rule.id" class="recurring-item">
-          <span><strong>{{ rule.name }}</strong><small>{{ money(rule.amount) }} · {{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }} · Próximo: {{ dateLabel(rule.next_at) }}</small></span><button type="button" class="secondary small-action" @click="toggleRecurring(rule)">
+          <span><strong>{{ rule.name }}</strong><small>{{ money(rule.amount) }} · {{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }} · Próximo: {{ dateLabel(rule.next_at) }}</small></span><button type="button" class="secondary small-action" @click="toggleRecurring(rule)" :disabled="saving" :aria-label="`${rule.active ? 'Pausar' : 'Reactivar'} ${rule.name}`">
             {{ rule.active ? 'Pausar' : 'Reactivar' }}
           </button>
         </div>
@@ -137,19 +159,22 @@ const {
         OTRO GRUPO
       </p><h2>Unirte con un código</h2><p class="muted">
         Al unirte saldrás de tu grupo actual si no eres su propietario.
-      </p><form class="inline-form" @submit.prevent="joinGroup">
+      </p><form class="inline-form" @submit.prevent="error = ''; groupAction = 'join'" :aria-busy="saving">
         <label class="inline-form-field">
           <span>Código de invitación *</span><input v-model="joinCode"
-                                                    maxlength="8"
+                                                    maxlength="8" minlength="8" autocapitalize="characters" autocomplete="off" :spellcheck="false"
                                                     placeholder="ABCD2345"
                                                     required
           />
-        </label><button class="secondary">
+        </label><button class="secondary" :disabled="saving">
           Unirme
         </button>
-      </form><button v-if="group?.owner_uid !== user.uid" class="text-danger" @click="leaveGroup">
+      </form><button v-if="group?.owner_uid !== user.uid" class="text-danger" @click="error = ''; groupAction = 'leave'" :disabled="saving">
         Salir del grupo actual
       </button>
     </article>
   </section>
+  <ConfirmDialog v-if="groupAction" title-id="group-action-title" :title="groupAction === 'join' ? 'Cambiar de grupo' : 'Salir del grupo'" :confirm-label="groupAction === 'join' ? 'Sí, cambiar de grupo' : 'Sí, salir del grupo'" :saving="saving" :error="error" @cancel="groupAction = ''" @confirm="confirmGroupAction">
+    {{ groupAction === 'join' ? 'Te unirás al grupo del código indicado y dejarás tu grupo actual. Revisa el código antes de continuar.' : 'Dejarás de compartir nuevos gastos con este grupo y se creará un grupo personal para ti.' }}
+  </ConfirmDialog>
 </template>

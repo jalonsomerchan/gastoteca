@@ -1,11 +1,11 @@
 <script setup>
+import { RouterLink } from 'vue-router'
 import { useGastotecaContext } from '../../composables/gastotecaContext.js'
 import { PhList, PhBell, PhCheck, PhSignOut } from '@phosphor-icons/vue'
 
 const {
   signOut,
   route,
-  router,
   brandIconUrl,
   menuOpen,
   user,
@@ -19,16 +19,15 @@ const {
   markNotificationRead,
   markAllNotificationsRead,
   openNotification,
-  navigateTo,
 } = useGastotecaContext()
 </script>
 
 <template>
   <header class="topbar">
-    <button class="brand" type="button" @click="router.push('/')">
+    <RouterLink class="brand" to="/" aria-label="La Gastoteca, ir a movimientos">
       <img class="brand-icon" :src="brandIconUrl" alt="" />
       <span><strong>La Gastoteca</strong><small>Cuentas claras, siempre</small></span>
-    </button>
+    </RouterLink>
     <div v-if="user" class="navigation-menu" @click.stop>
       <button
         type="button"
@@ -36,9 +35,9 @@ const {
         :aria-expanded="menuOpen"
         :aria-label="menuOpen ? 'Cerrar menú' : 'Abrir menú'"
         aria-controls="main-navigation"
-        @click="menuOpen = !menuOpen"
+        @click="menuOpen = !menuOpen; notificationsOpen = false"
       >
-        <PhList :size="22" weight="regular" /><span>Menú</span>
+        <PhList aria-hidden="true" :size="22" weight="regular" /><span>Menú</span>
       </button>
       <nav
         v-if="menuOpen"
@@ -46,16 +45,16 @@ const {
         class="navigation-panel"
         aria-label="Navegación principal"
       >
-        <button
+        <RouterLink
           v-for="item in navigationItems"
           :key="item.route"
-          type="button"
+          :to="item.path"
           :class="{ active: route.name === item.route }"
           :aria-current="route.name === item.route ? 'page' : undefined"
-          @click="navigateTo(item.path)"
+          @click="menuOpen = false"
         >
           <component :is="item.icon" :size="19" weight="regular" /><span>{{ item.label }}</span>
-        </button>
+        </RouterLink>
       </nav>
     </div>
     <div v-if="user" class="notification-center" @click.stop>
@@ -68,7 +67,7 @@ const {
         title="Notificaciones"
         @click="notificationsOpen = !notificationsOpen; menuOpen = false"
       >
-        <PhBell :size="21" weight="regular" />
+        <PhBell aria-hidden="true" :size="21" weight="regular" />
         <span v-if="unreadNotificationCount" class="notification-count">{{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}</span>
       </button>
       <section v-if="notificationsOpen"
@@ -87,7 +86,7 @@ const {
           </button>
         </header>
         <div v-if="!notifications.length" class="notifications-empty">
-          <PhBell :size="23" /><span>Todo al día. Aquí verás la actividad de tu grupo.</span>
+          <PhBell aria-hidden="true" :size="23" /><span>Todo al día. Aquí verás la actividad de tu grupo.</span>
         </div>
         <div v-else class="notifications-list">
           <article v-for="notification in notifications"
@@ -107,7 +106,7 @@ const {
                     title="Marcar como leída"
                     @click="markNotificationRead(notification)"
             >
-              <PhCheck :size="17" />
+              <PhCheck aria-hidden="true" :size="17" />
             </button>
           </article>
         </div>
@@ -116,8 +115,8 @@ const {
     <div v-if="user" class="account">
       <img v-if="user.photoURL" :src="user.photoURL" alt="" />
       <span>{{ user.displayName || user.email }}</span>
-      <button class="icon-button" title="Cerrar sesión" @click="signOut">
-        <PhSignOut :size="21" />
+      <button class="icon-button" title="Cerrar sesión" aria-label="Cerrar sesión" @click="signOut">
+        <PhSignOut aria-hidden="true" :size="21" />
       </button>
     </div>
   </header>

@@ -1,3 +1,4 @@
+import { isPositiveAmount, splitValidation } from '../domain/validation.js'
 import { postJson } from '../lib/api.js'
 
 export function useRecurring({
@@ -14,11 +15,15 @@ export function useRecurring({
   recurringDeleteTarget,
 }) {
   async function toggleRecurring(rule) {
+    if (saving.value) return
+    saving.value = true
+    error.value = ''
     try {
       const data = await postJson('gastoteca/toggle_recurring', await freshToken(true), { id: rule.id, active: !rule.active })
       group.value = data.group
       flash(rule.active ? 'Repetición pausada.' : 'Repetición reactivada.')
     } catch (reason) { error.value = reason.message }
+    finally { saving.value = false }
   }
 
   function startRecurringRule(rule = null) {
@@ -70,14 +75,23 @@ export function useRecurring({
   }
 
   async function saveRecurring() {
+    if (saving.value) return
     error.value = ''
-    if (!recurringDraft.name.trim() || Number(recurringDraft.amount) <= 0) {
+    if (!recurringDraft.name.trim() || !isPositiveAmount(recurringDraft.amount)) {
       error.value = 'Añade un nombre y un importe mayor que cero.'
       return
     }
     if (!recurringDraft.applies_to_all && !recurringDraft.participant_uids.length) {
       error.value = 'Selecciona al menos una persona a la que se aplica el movimiento.'
       return
+    }
+    if (recurringDraft.paid_by_type === 'person' && !memberOptions.value.some(member => member.uid === recurringDraft.paid_by_uid)) {
+      error.value = 'Selecciona quién paga o recibe este movimiento.'
+      return
+    }
+    if (recurringDraft.share_mode === 'amount') {
+      error.value = splitValidation(recurringSplitMembers.value.map((member, index) => recurringShareValue(member, index)), recurringDraft.amount)
+      if (error.value) return
     }
     const wasEditing = Boolean(recurringDraft.id)
     saving.value = true
@@ -95,6 +109,7 @@ export function useRecurring({
   }
 
   async function removeRecurring() {
+    if (saving.value) return
     if (!recurringDeleteTarget.value) return
     saving.value = true
     try {

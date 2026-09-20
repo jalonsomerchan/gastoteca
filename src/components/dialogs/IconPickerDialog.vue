@@ -1,9 +1,9 @@
 <script setup>
+import BaseDialog from './BaseDialog.vue'
 import { useGastotecaContext } from '../../composables/gastotecaContext.js'
 import { PhX, PhMagnifyingGlass } from '@phosphor-icons/vue'
 
 const {
-  
   
   iconPickerOpen,
   iconPickerTarget,
@@ -29,29 +29,26 @@ const {
 </script>
 
 <template>
-  <div v-if="iconPickerOpen" class="icon-picker-backdrop" @mousedown.self="closeIconPicker">
+  <BaseDialog v-if="iconPickerOpen" labelled-by="icon-picker-title" @close="closeIconPicker">
     <section class="icon-picker-modal"
-             role="dialog"
-             aria-modal="true"
-             aria-labelledby="icon-picker-title"
              @mousedown.stop
     >
       <header class="icon-picker-header">
         <div>
-          <p id="icon-picker-title" class="eyebrow modal-title">
+          <p id="icon-picker-title" tabindex="-1" data-initial-focus class="eyebrow modal-title">
             Elige un icono
-          </p><p>Busca en todas las colecciones o explora una biblioteca por categorías.</p>
+          </p><p>Busca o explora una colección. Muchos iconos usan nombres en inglés: coffee, home o car.</p>
         </div><button type="button"
                       class="icon-button"
                       aria-label="Cerrar selector de iconos"
                       @click="closeIconPicker"
         >
-          <PhX :size="22" />
+          <PhX aria-hidden="true" :size="22" />
         </button>
       </header>
       <div class="icon-picker-content">
         <label class="icon-picker-search">
-          <PhMagnifyingGlass :size="19" /><input v-model="iconPickerSearch"
+          <PhMagnifyingGlass aria-hidden="true" :size="19" /><input v-model="iconPickerSearch"
                                                  type="search"
                                                  aria-label="Buscar iconos en Iconify"
                                                  placeholder="Buscar iconos, por ejemplo café, casa o transporte…"
@@ -62,7 +59,7 @@ const {
           Escribe al menos dos letras para buscar en Iconify.
         </p>
         <div v-if="iconPickerSearch.trim().length >= 2" class="icon-picker-results">
-          <p v-if="iconPickerResults.length" class="icon-picker-count">
+          <p v-if="iconPickerResults.length" class="icon-picker-count" role="status">
             {{ iconPickerResults.length }} iconos encontrados · {{ iconPickerSearch.trim() }}
           </p>
           <div class="icon-picker-grid">
@@ -71,10 +68,10 @@ const {
                     type="button"
                     class="icon-picker-option"
                     :class="{ selected: iconPickerTarget?.icon === icon }"
-                    :title="icon"
+                    :title="icon" :aria-label="`Elegir icono ${icon}`" :aria-pressed="iconPickerTarget?.icon === icon"
                     @click="chooseIcon(icon)"
             >
-              <iconify-icon :icon="icon"></iconify-icon><span>{{ iconPickerSearchCollections[icon.split(':')[0]] || icon.split(':')[0] }} · {{ icon.split(':')[1] }}</span>
+              <iconify-icon aria-hidden="true" :icon="icon"></iconify-icon><span>{{ iconPickerSearchCollections[icon.split(':')[0]] || icon.split(':')[0] }} · {{ icon.split(':')[1] }}</span>
             </button>
           </div>
           <button v-if="iconPickerSearchHasMore"
@@ -98,7 +95,7 @@ const {
               <option v-for="collection in iconPickerVisibleCollections" :key="collection.prefix" :value="collection.prefix">{{ collection.name }} · {{ collection.total.toLocaleString('es-ES') }}</option>
             </select></label>
           </div>
-          <p v-if="iconPickerData?.title" class="icon-picker-count">
+          <p v-if="iconPickerData?.title" class="icon-picker-count" role="status">
             {{ iconPickerData.title }} · {{ (iconPickerData.total || 0).toLocaleString('es-ES') }} iconos
           </p>
           <div v-if="iconPickerGroups.length" class="icon-picker-groups">
@@ -109,10 +106,10 @@ const {
                         type="button"
                         class="icon-picker-option"
                         :class="{ selected: iconPickerTarget?.icon === `${iconPickerCollection}:${name}` }"
-                        :title="`${iconPickerCollection}:${name}`"
+                        :title="`${iconPickerCollection}:${name}`" :aria-label="`Elegir icono ${name}`" :aria-pressed="iconPickerTarget?.icon === `${iconPickerCollection}:${name}`"
                         @click="chooseIcon(`${iconPickerCollection}:${name}`)"
                 >
-                  <iconify-icon :icon="`${iconPickerCollection}:${name}`"></iconify-icon><span>{{ name }}</span>
+                  <iconify-icon aria-hidden="true" :icon="`${iconPickerCollection}:${name}`"></iconify-icon><span>{{ name }}</span>
                 </button>
               </div>
             </section>
@@ -125,7 +122,7 @@ const {
             Mostrar más iconos
           </button>
         </template>
-        <div v-if="iconPickerLoading" class="icon-picker-status">
+        <div v-if="iconPickerLoading" class="icon-picker-status" role="status">
           <span class="loader"></span><span>{{ iconPickerSearch.trim().length >= 2 ? 'Buscando iconos…' : 'Cargando iconos…' }}</span>
         </div>
         <p v-if="iconPickerError" class="icon-picker-error" role="alert">
@@ -133,5 +130,5 @@ const {
         </p>
       </div>
     </section>
-  </div>
+  </BaseDialog>
 </template>

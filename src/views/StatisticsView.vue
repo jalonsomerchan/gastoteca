@@ -27,15 +27,19 @@ const {
           <p class="eyebrow">
             EVOLUCIÓN
           </p><h2>Gasto por mes</h2>
-        </div><PhChartDonut :size="27" />
+        </div><PhChartDonut aria-hidden="true" :size="27" />
       </div>
-      <div v-if="stats.monthly.length" class="month-chart">
+      <div v-if="stats.monthly.length" class="month-chart" aria-hidden="true">
         <div v-for="item in stats.monthly" :key="item.month" class="month-column">
           <strong>{{ money(item.total) }}</strong><div><span :style="{ height: `${Math.max(8, Number(item.total) / Math.max(1, ...stats.monthly.map(x => Number(x.total))) * 100)}%` }"></span></div><small>{{ monthLabel(item.month) }}</small>
         </div>
       </div><p v-else class="muted">
         Añade gastos para ver su evolución.
       </p>
+      <details v-if="stats.monthly.length" class="data-table-disclosure">
+        <summary>Ver importes por mes en una tabla</summary>
+        <table class="data-table"><caption>Evolución del gasto mensual</caption><thead><tr><th scope="col">Mes</th><th scope="col">Importe</th></tr></thead><tbody><tr v-for="item in stats.monthly" :key="item.month"><th scope="row">{{ monthLabel(item.month) }}</th><td>{{ money(item.total) }}</td></tr></tbody></table>
+      </details>
     </article>
     <article class="chart-card">
       <div class="card-title">
@@ -47,7 +51,7 @@ const {
       </div>
       <div class="bar-list">
         <div v-for="item in stats.by_category" :key="item.category" class="bar-item">
-          <span><iconify-icon :icon="category(item.category).icon"></iconify-icon></span><div><p><strong>{{ category(item.category).label }}</strong><b>{{ money(item.total) }}</b></p><i><em :style="{ width: `${Number(item.total) / maxCategoryTotal * 100}%`, background: category(item.category).color }"></em></i></div>
+          <span><iconify-icon aria-hidden="true" :icon="category(item.category).icon"></iconify-icon></span><div><p><strong>{{ category(item.category).label }}</strong><b>{{ money(item.total) }}</b></p><i><em :style="{ width: `${Number(item.total) / maxCategoryTotal * 100}%`, background: category(item.category).color }"></em></i></div>
         </div><p v-if="!stats.by_category.length" class="muted">
           Aún no hay datos.
         </p>

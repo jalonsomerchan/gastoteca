@@ -38,7 +38,7 @@ function populate(app) {
 
 async function renderComponent(file, routeName, setup = () => {}) {
   const component = (await server.ssrLoadModule(file)).default
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', name: routeName, component }] })
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', name: routeName, component }, { path: '/:pathMatch(.*)*', component }] })
   await router.push('/')
   await router.isReady()
   const warnings = []
@@ -228,4 +228,41 @@ test('split mode conversions preserve the distribution and total', () => {
   editor.draft.participant_shares = { alice: '25.00', bob: '75.00' }
   editor.setShareMode('amount')
   assert.deepEqual(editor.draft.participant_shares, { alice: '7.50', bob: '22.50' })
+})
+
+test('expense filters are labelled and empty results keep their main heading', async () => {
+  const html = await renderComponent('/src/views/ExpensesView.vue', 'expenses', app => {
+    app.filtersOpen.value = true
+    app.expenses.value = []
+  })
+  assert.match(html, /<h1>Movimientos<\/h1>/)
+  for (const id of ['expense-search', 'expense-category', 'expense-from', 'expense-to']) assert.ok(html.includes(`for="${id}"`))
+  assert.match(html, /Añadir el primer movimiento/)
+})
+
+test('expense comboboxes use unique ids and distinguish field labels', async () => {
+  const html = await renderComponent('/src/components/dialogs/ExpenseDialog.vue', 'expenses', app => app.openExpense(expense))
+  for (const field of ['category', 'place', 'city']) {
+    assert.ok(html.includes(`expense-${field}-select-multiselect-options`))
+    assert.ok(html.includes(`expense-${field}-label`))
+  }
+  assert.match(html, /aria-label="Nombre del gasto"/)
+  assert.match(html, /name="draft-share_mode"/)
+})
+
+test('invalid custom shares prevent the API request', async t => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => { throw new Error('Unexpected API request') })
+  const editor = expenseEditor()
+  editor.openExpense(expense)
+  editor.draft.participant_shares = { alice: 2, bob: 2 }
+  await editor.saveExpense()
+  assert.match(editor.error.value, /sumar el importe total/)
+  assert.equal(fetchMock.mock.callCount(), 0)
+  assert.equal(editor.modalOpen.value, true)
+})
+
+test('monthly statistics expose a semantic table', async () => {
+  const html = await renderComponent('/src/views/StatisticsView.vue', 'stats')
+  assert.match(html, /<caption>Evolución del gasto mensual<\/caption>/)
+  assert.match(html, /scope="row"/)
 })

@@ -66,3 +66,11 @@ npm run build
 ```
 
 Las pruebas usan el ejecutor de Node y Vite para cargar componentes Vue, sin dependencias de pruebas adicionales. Cubren balances y liquidaciones, sugerencias, aislamiento del estado, reparto, contratos de guardado y borrado, errores de API y renderizado de las diez rutas y los diálogos. Las peticiones de las pruebas de operaciones están simuladas: no requieren Firebase ni modifican datos reales. El workflow ejecuta las pruebas antes de generar la build.
+
+## Accesibilidad y uso
+
+Las pantallas comparten enlace para saltar al contenido, títulos de documento por ruta, foco visible, estados anunciados y estilos para movimiento reducido. Los modales usan `BaseDialog` (elemento `dialog` nativo): el fondo queda inactivo, Escape cierra el diálogo y el foco regresa al control de origen. Las confirmaciones anidadas mantienen el foco dentro del diálogo superior; durante el guardado se bloquea el cierre.
+
+Los formularios incluyen nombres accesibles, grupos de radio identificados, selectores con identificadores únicos y validación de importes y repartos. Hay confirmaciones para borrar presupuestos y cambiar de grupo, acceso manual a más movimientos y tablas alternativas para la evolución mensual.
+
+Verificación de esta mejora: 39 pruebas automáticas, lint y build; comprobación manual en el navegador integrado con datos ficticios a 390 px de ancho de apertura, tabulación, Escape, restauración de foco, confirmación anidada y selectores. Las diez rutas se prueban también mediante renderizado con datos y vacías. No equivale a una certificación WCAG ni a una prueba completa con lector de pantalla.

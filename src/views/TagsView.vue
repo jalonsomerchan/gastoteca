@@ -1,4 +1,5 @@
 <script setup>
+import { focusElement } from '../utils/focus.js'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
 import { PhCheck, PhTag } from '@phosphor-icons/vue'
 
@@ -21,7 +22,7 @@ const {
     </div>
   </section>
   <section class="feature-layout tag-layout">
-    <form class="feature-panel feature-form tag-editor" @submit.prevent="saveTag">
+    <form :aria-busy="saving" class="feature-panel feature-form tag-editor" @submit.prevent="saveTag">
       <div class="feature-panel-heading">
         <div>
           <p class="eyebrow">
@@ -29,7 +30,7 @@ const {
           </p><h2>{{ tagDraft.id ? 'Cambia su nombre' : 'Crea una etiqueta' }}</h2>
         </div>
       </div>
-      <label><span>Nombre *</span><input v-model="tagDraft.name"
+      <label><span>Nombre *</span><input id="tag-name" v-model="tagDraft.name"
                                          maxlength="40"
                                          placeholder="Por ejemplo: vacaciones"
                                          required
@@ -45,7 +46,7 @@ const {
         >
           Cancelar
         </button><span v-else></span><button class="primary" :disabled="saving">
-          <PhCheck :size="17" /> {{ saving ? 'Guardando…' : tagDraft.id ? 'Guardar cambios' : 'Crear etiqueta' }}
+          <PhCheck aria-hidden="true" :size="17" /> {{ saving ? 'Guardando…' : tagDraft.id ? 'Guardar cambios' : 'Crear etiqueta' }}
         </button>
       </div>
     </form>
@@ -60,19 +61,19 @@ const {
       <div v-if="group?.tags?.length" class="feature-list">
         <article v-for="tag in group.tags" :key="tag.id" class="feature-list-row">
           <div class="feature-list-main">
-            <span class="tag-chip"><PhTag :size="15" /> {{ tag.name }}</span><small>{{ tag.usage_count }} {{ tag.usage_count === 1 ? 'movimiento' : 'movimientos' }} · Último uso {{ dateLabel(tag.last_used_at) }}</small>
+            <span class="tag-chip"><PhTag aria-hidden="true" :size="15" /> {{ tag.name }}</span><small>{{ tag.usage_count }} {{ tag.usage_count === 1 ? 'movimiento' : 'movimientos' }} · Último uso {{ tag.last_used_at ? dateLabel(tag.last_used_at) : 'Sin uso todavía' }}</small>
           </div>
           <div class="feature-row-actions">
-            <button type="button" class="ghost small-action" @click="Object.assign(tagDraft, { id: tag.id, name: tag.name })">
+            <button type="button" class="ghost small-action" @click="Object.assign(tagDraft, { id: tag.id, name: tag.name }); focusElement('#tag-name')" :aria-label="`Editar etiqueta ${tag.name}`">
               Editar
-            </button><button type="button" class="danger-button small-action" @click="tagDeleteTarget = tag">
+            </button><button type="button" class="danger-button small-action" @click="tagDeleteTarget = tag" :aria-label="`Eliminar etiqueta ${tag.name}`">
               Eliminar
             </button>
           </div>
         </article>
       </div>
       <div v-else class="feature-empty">
-        <PhTag :size="27" /><strong>Aún no hay etiquetas</strong><p>Crea una etiqueta aquí o al añadir un movimiento.</p>
+        <PhTag aria-hidden="true" :size="27" /><strong>Aún no hay etiquetas</strong><p>Crea una etiqueta aquí o al añadir un movimiento.</p>
       </div>
     </section>
   </section>
