@@ -40,3 +40,29 @@ El servidor de la API envía las invitaciones con PHP `mail()`, por lo que el se
 El workflow `.github/workflows/deploy.yml` ejecuta lint, genera la build, crea el fallback `404.html` para Vue Router y publica `dist` al hacer push a `main`. `public/CNAME` configura el dominio `gastoteca.alon.one` y las claves públicas Firebase de producción están en `.env.production`.
 
 En el repositorio de GitHub solo hay que seleccionar **GitHub Actions** como origen de Pages y crear el registro DNS `CNAME gastoteca → jalonsomerchan.github.io`. En Firebase Authentication debe figurar `gastoteca.alon.one` como dominio autorizado.
+
+## Estructura del frontend
+
+- `src/App.vue`: estructura general, estado de carga y montaje de vistas y diálogos.
+- `src/router.js` y `src/views/`: las diez rutas utilizan vistas reales con carga diferida; los dos catálogos comparten `CatalogView`.
+- `src/components/layout/`: cabecera y acceso a la aplicación.
+- `src/components/expenses/`: tarjeta de movimiento con propiedades y eventos, independiente del estado global.
+- `src/components/dialogs/`: edición de movimientos, liquidaciones, selector de iconos y confirmación reutilizable de borrado.
+- `src/state/createGastotecaState.js`: crea un estado reactivo independiente por instancia, incluidos los borradores.
+- `src/composables/useGastoteca.js`: coordina la sesión, carga de rutas y módulos funcionales. `gastotecaContext.js` proporciona esa instancia a las vistas y los diálogos conservando las referencias reactivas.
+- `src/composables/useExpenses.js`, `useRecurring.js`, `useBudgets.js`, `useTags.js`, `useGroup.js`, etc.: lógica por responsabilidad, con dependencias explícitas. Los cálculos de balance, catálogos y sugerencias se separan de las operaciones de API.
+- `src/domain/`, `src/config/` y `src/utils/`: catálogos y constantes, navegación y formatos compartidos.
+- `src/lib/`: transporte HTTP e integración con Firebase.
+- `src/styles/`: estilos por área; `src/styles.css` fija el orden de carga para conservar la cascada.
+
+Para añadir una pantalla, crea una vista en `src/views`, registra su ruta y añade su entrada de navegación si corresponde. Las reglas y operaciones de negocio deben estar en su composable; los componentes reutilizables reciben propiedades y emiten eventos. No crees una segunda instancia de `useGastoteca` desde una vista: usa `useGastotecaContext` para acceder al estado de la sesión.
+
+## Verificación
+
+```sh
+npm run lint
+npm test
+npm run build
+```
+
+Las pruebas usan el ejecutor de Node y Vite para cargar componentes Vue, sin dependencias de pruebas adicionales. Cubren balances y liquidaciones, sugerencias, aislamiento del estado, reparto, contratos de guardado y borrado, errores de API y renderizado de las diez rutas y los diálogos. Las peticiones de las pruebas de operaciones están simuladas: no requieren Firebase ni modifican datos reales. El workflow ejecuta las pruebas antes de generar la build.

@@ -1,0 +1,22 @@
+.balance-grid.single-balance { grid-template-columns:minmax(0,1fr); }
+.balance-summary-card { display:block; width:100%; text-align:left; cursor:pointer; font:inherit; transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease; }
+.balance-summary-card:hover { transform:translateY(-2px); border-color:#b8d0c2; box-shadow:0 12px 28px #25302912; }
+.balance-summary-card small { position:relative; z-index:1; display:flex; align-items:center; gap:.35rem; margin-top:.8rem; color:var(--green); font-size:.75rem; font-weight:700; }
+.balance-detail-total { max-width:1000px; margin:0 auto 1rem; }
+.balance-detail-total small { position:relative; z-index:1; display:block; margin-top:.45rem; color:var(--muted); font-size:.75rem; }
+.balance-breakdown-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; max-width:1000px; margin:0 auto; }
+.balance-breakdown-card { min-width:0; }
+.balance-breakdown-card .card-title { margin-bottom:1rem; }
+.balance-breakdown-card .card-title h2 { font-family:Fraunces,serif; font-size:1.5rem; }
+.balance-entry-list { display:grid; }
+.balance-entry { display:flex; align-items:center; gap:.7rem; min-width:0; padding:.75rem 0; border-bottom:1px solid #edf0ed; }
+.balance-entry-main { flex:1; min-width:0; }
+.balance-entry-main strong,.balance-entry-main small { display:block; }
+.balance-entry-main strong { font-size:.78rem; }
+.balance-entry-main small { margin-top:.2rem; color:var(--muted); font-size:.65rem; overflow-wrap:anywhere; }
+.balance-entry>b { flex:0 0 auto; color:var(--ink); font-family:Fraunces,serif; font-size:.95rem; }
+
+@media (max-width:900px) {
+  .balance-breakdown-grid { grid-template-columns:1fr; }
+}
+

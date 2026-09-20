@@ -34,6 +34,9 @@ jobs:
       - name: Check code
         run: npm run lint
 
+      - name: Test application
+        run: npm test
+
       - name: Build production site
         run: npm run build
         env:

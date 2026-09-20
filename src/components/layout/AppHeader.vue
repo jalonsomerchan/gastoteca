@@ -1,0 +1,124 @@
+<script setup>
+import { useGastotecaContext } from '../../composables/gastotecaContext.js'
+import { PhList, PhBell, PhCheck, PhSignOut } from '@phosphor-icons/vue'
+
+const {
+  signOut,
+  route,
+  router,
+  brandIconUrl,
+  menuOpen,
+  user,
+  notifications,
+  unreadNotificationCount,
+  notificationsOpen,
+  markingNotificationIds,
+  markingAllNotifications,
+  navigationItems,
+  notificationDateLabel,
+  markNotificationRead,
+  markAllNotificationsRead,
+  openNotification,
+  navigateTo,
+} = useGastotecaContext()
+</script>
+
+<template>
+  <header class="topbar">
+    <button class="brand" type="button" @click="router.push('/')">
+      <img class="brand-icon" :src="brandIconUrl" alt="" />
+      <span><strong>La Gastoteca</strong><small>Cuentas claras, siempre</small></span>
+    </button>
+    <div v-if="user" class="navigation-menu" @click.stop>
+      <button
+        type="button"
+        class="menu-trigger"
+        :aria-expanded="menuOpen"
+        :aria-label="menuOpen ? 'Cerrar menú' : 'Abrir menú'"
+        aria-controls="main-navigation"
+        @click="menuOpen = !menuOpen"
+      >
+        <PhList :size="22" weight="regular" /><span>Menú</span>
+      </button>
+      <nav
+        v-if="menuOpen"
+        id="main-navigation"
+        class="navigation-panel"
+        aria-label="Navegación principal"
+      >
+        <button
+          v-for="item in navigationItems"
+          :key="item.route"
+          type="button"
+          :class="{ active: route.name === item.route }"
+          :aria-current="route.name === item.route ? 'page' : undefined"
+          @click="navigateTo(item.path)"
+        >
+          <component :is="item.icon" :size="19" weight="regular" /><span>{{ item.label }}</span>
+        </button>
+      </nav>
+    </div>
+    <div v-if="user" class="notification-center" @click.stop>
+      <button
+        type="button"
+        class="icon-button notification-trigger"
+        :aria-label="unreadNotificationCount ? `Notificaciones, ${unreadNotificationCount} sin leer` : 'Notificaciones'"
+        :aria-expanded="notificationsOpen"
+        aria-controls="notifications-panel"
+        title="Notificaciones"
+        @click="notificationsOpen = !notificationsOpen; menuOpen = false"
+      >
+        <PhBell :size="21" weight="regular" />
+        <span v-if="unreadNotificationCount" class="notification-count">{{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}</span>
+      </button>
+      <section v-if="notificationsOpen"
+               id="notifications-panel"
+               class="notifications-panel"
+               aria-label="Notificaciones recientes"
+      >
+        <header class="notifications-heading">
+          <div><strong>Notificaciones</strong><span v-if="unreadNotificationCount">{{ unreadNotificationCount }} sin leer</span></div>
+          <button type="button"
+                  class="mark-all-read"
+                  :disabled="!unreadNotificationCount || markingAllNotifications"
+                  @click="markAllNotificationsRead"
+          >
+            {{ markingAllNotifications ? 'Guardando…' : 'Marcar todas como leídas' }}
+          </button>
+        </header>
+        <div v-if="!notifications.length" class="notifications-empty">
+          <PhBell :size="23" /><span>Todo al día. Aquí verás la actividad de tu grupo.</span>
+        </div>
+        <div v-else class="notifications-list">
+          <article v-for="notification in notifications"
+                   :key="notification.id"
+                   class="notification-item"
+                   :class="{ unread: !notification.read_at }"
+          >
+            <button type="button" class="notification-open" @click="openNotification(notification)">
+              <span class="notification-unread-dot" :class="{ visible: !notification.read_at }"></span>
+              <span class="notification-copy"><strong>{{ notification.title }}</strong><span>{{ notification.body }}</span><time>{{ notificationDateLabel(notification.created_at) }}</time></span>
+            </button>
+            <button v-if="!notification.read_at"
+                    type="button"
+                    class="notification-mark-read"
+                    :disabled="markingNotificationIds.includes(notification.id)"
+                    :aria-label="`Marcar como leída: ${notification.title}`"
+                    title="Marcar como leída"
+                    @click="markNotificationRead(notification)"
+            >
+              <PhCheck :size="17" />
+            </button>
+          </article>
+        </div>
+      </section>
+    </div>
+    <div v-if="user" class="account">
+      <img v-if="user.photoURL" :src="user.photoURL" alt="" />
+      <span>{{ user.displayName || user.email }}</span>
+      <button class="icon-button" title="Cerrar sesión" @click="signOut">
+        <PhSignOut :size="21" />
+      </button>
+    </div>
+  </header>
+</template>
