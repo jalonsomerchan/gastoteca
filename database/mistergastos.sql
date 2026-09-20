@@ -204,5 +204,31 @@ CREATE TABLE IF NOT EXISTS mg_telegram_preferences (
   CONSTRAINT fk_mg_telegram_preferences_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO mg_schema_version (id, version) VALUES (1, 3)
+CREATE TABLE IF NOT EXISTS mg_notifications (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  group_id BIGINT UNSIGNED NOT NULL,
+  recipient_uid VARCHAR(128) NOT NULL,
+  actor_uid VARCHAR(128) NOT NULL,
+  type VARCHAR(40) NOT NULL,
+  title VARCHAR(120) NOT NULL,
+  body VARCHAR(500) NOT NULL,
+  target VARCHAR(120) NOT NULL DEFAULT '/',
+  read_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_mg_notification_recipient (group_id, recipient_uid, created_at),
+  KEY idx_mg_notification_unread (group_id, recipient_uid, read_at),
+  CONSTRAINT fk_mg_notification_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mg_notification_preferences (
+  group_id BIGINT UNSIGNED NOT NULL,
+  uid VARCHAR(128) NOT NULL,
+  notification_types VARCHAR(255) NOT NULL DEFAULT '[]',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (group_id, uid),
+  CONSTRAINT fk_mg_notification_preferences_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO mg_schema_version (id, version) VALUES (1, 5)
 ON DUPLICATE KEY UPDATE version = VALUES(version);

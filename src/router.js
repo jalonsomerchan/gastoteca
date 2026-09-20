@@ -14,6 +14,7 @@ export default createRouter({
     { path: '/establecimientos', name: 'establishments', component: PageRoute },
     { path: '/categorias', name: 'categories', component: PageRoute },
     { path: '/grupo', name: 'group', component: PageRoute },
+    { path: '/ajustes', name: 'settings', component: PageRoute },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })

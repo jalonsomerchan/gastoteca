@@ -11,7 +11,9 @@ import {
   PhCrosshair,
   PhArrowDown,
   PhArrowUp,
+  PhBell,
   PhFunnel,
+  PhGear,
   PhGoogleLogo,
   PhHouse,
   PhList,
@@ -46,6 +48,11 @@ const error = ref('')
 const notice = ref('')
 const expenses = ref([])
 const settlements = ref([])
+const notifications = ref([])
+const unreadNotificationCount = ref(0)
+const notificationsOpen = ref(false)
+const markingNotificationIds = ref([])
+const markingAllNotifications = ref(false)
 const group = ref(null)
 const stats = ref({ total: 0, count: 0, average: 0, by_category: [], by_member: [], monthly: [] })
 const modalOpen = ref(false)
@@ -61,11 +68,13 @@ const settlementDraft = reactive({ payer_uid: '', payee_uid: '', amount: '', pay
 const budgetDraft = reactive({ category: 'food', monthly_limit: '' })
 const tagDraft = reactive({ id: '', name: '' })
 const telegramNotificationTypes = ref([])
+const appNotificationTypes = ref([])
 const telegramConfigured = ref(false)
 const telegramConnected = ref(false)
 const telegramUsername = ref('')
 const telegramLinkUrl = ref('')
 const telegramSaving = ref(false)
+const notificationSaving = ref(false)
 const filters = reactive({ search: '', category: '', from: '', to: '' })
 const filtersOpen = ref(false)
 const visibleExpenseCount = ref(20)
@@ -97,6 +106,7 @@ let iconPickerCollectionRequestId = 0
 const iconPickerCollectionCache = new Map()
 let expenseObserver = null
 let routeDataRequestId = 0
+let notificationsPollTimer = null
 
 const builtInCategories = [
   { id: 'food', label: 'Alimentación', icon: 'mdi:food-apple-outline', color: '#d36b47' },
@@ -108,6 +118,14 @@ const builtInCategories = [
   { id: 'bills', label: 'Facturas', icon: 'mdi:lightning-bolt-outline', color: '#86743e' },
   { id: 'travel', label: 'Viajes', icon: 'mdi:airplane', color: '#3f8890' },
   { id: 'other', label: 'Otros', icon: 'mdi:shape-outline', color: '#757a78' },
+]
+
+const notificationOptions = [
+  { value: 'expense_created', label: 'Nuevos gastos e ingresos', description: 'Cuando alguien añade un movimiento al grupo.' },
+  { value: 'expense_updated', label: 'Movimientos editados', description: 'Cuando se modifica un gasto o ingreso.' },
+  { value: 'expense_deleted', label: 'Movimientos eliminados', description: 'Cuando alguien elimina un movimiento.' },
+  { value: 'settlement', label: 'Pagos entre miembros', description: 'Cuando se registra un pago para saldar una deuda.' },
+  { value: 'member_joined', label: 'Nuevos miembros', description: 'Cuando una persona se une a tu grupo.' },
 ]
 
 const paymentMethods = [
@@ -318,6 +336,7 @@ const navigationItems = [
   { route: 'establishments', label: 'Establecimientos', path: '/establecimientos', icon: PhMapPin },
   { route: 'categories', label: 'Categorías', path: '/categorias', icon: PhTag },
   { route: 'group', label: 'Grupo', path: '/grupo', icon: PhUsers },
+  { route: 'settings', label: 'Ajustes', path: '/ajustes', icon: PhGear },
 ]
 
 const category = (id) => categories.value.find((item) => item.id === id) || { id, label: id || 'Otros', icon: group.value?.category_icons?.[id] || 'mdi:tag-outline', color: '#757a78' }
@@ -325,6 +344,7 @@ const memberLabel = (uid) => memberOptions.value.find((item) => item.uid === uid
 const establishmentIcon = (place) => catalogEstablishments.value.find((item) => normalizeName(item.name) === normalizeName(place || ''))?.icon || ''
 const money = (value) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
 const dateLabel = (value) => new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value.replace(' ', 'T')))
+const notificationDateLabel = (value) => new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value.replace(' ', 'T')))
 const monthLabel = (value) => new Intl.DateTimeFormat('es-ES', { month: 'short', year: '2-digit' }).format(new Date(`${value}-01T12:00:00`))
 const expenseLocation = (expense) => [expense.place || 'Sin establecimiento', expense.city].filter(Boolean).join(' · ')
 
@@ -390,6 +410,56 @@ async function freshToken(force = false) {
   return token.value
 }
 
+async function loadNotifications() {
+  if (!user.value) return
+  const requestedUid = user.value.uid
+  try {
+    const data = await getJson('gastoteca/notifications', await freshToken())
+    if (user.value?.uid !== requestedUid) return
+    notifications.value = data.notifications || []
+    unreadNotificationCount.value = Number(data.unread_count) || 0
+  } catch {
+    // Notification polling should never block the rest of the app.
+  }
+}
+
+async function markNotificationRead(notification) {
+  if (!notification || notification.read_at || markingNotificationIds.value.includes(notification.id)) return
+  markingNotificationIds.value.push(notification.id)
+  try {
+    const data = await postJson('gastoteca/mark_notification_read', await freshToken(true), { id: notification.id })
+    notification.read_at = new Date().toISOString()
+    unreadNotificationCount.value = Number(data.unread_count) || 0
+  } catch (reason) {
+    error.value = reason.message
+  } finally {
+    markingNotificationIds.value = markingNotificationIds.value.filter((id) => id !== notification.id)
+  }
+}
+
+async function markAllNotificationsRead() {
+  if (!unreadNotificationCount.value || markingAllNotifications.value) return
+  markingAllNotifications.value = true
+  try {
+    await postJson('gastoteca/mark_all_notifications_read', await freshToken(true), {})
+    const readAt = new Date().toISOString()
+    notifications.value.forEach((notification) => { if (!notification.read_at) notification.read_at = readAt })
+    unreadNotificationCount.value = 0
+  } catch (reason) {
+    error.value = reason.message
+  } finally {
+    markingAllNotifications.value = false
+  }
+}
+
+async function openNotification(notification) {
+  if (!notification.read_at) await markNotificationRead(notification)
+  notificationsOpen.value = false
+  menuOpen.value = false
+  const target = notification.target || '/'
+  if (route.fullPath !== target) await router.push(target)
+}
+
 async function loadRouteData(routeName) {
   if (!user.value) return
 
@@ -407,9 +477,10 @@ async function loadRouteData(routeName) {
     if (routeName === 'stats') {
       requests.push(getJson('gastoteca/statistics', authToken))
     }
-    const featureRequest = routeName === 'group' ? Promise.all([
+    const featureRequest = routeName === 'settings' ? Promise.all([
         getJson('gastoteca/telegram_settings', authToken),
         getJson('menudiario/telegram_status', authToken).catch(() => null),
+        getJson('gastoteca/notification_settings', authToken),
       ]) : Promise.resolve(null)
 
     const [groupData, pageData] = await Promise.all(requests)
@@ -422,12 +493,14 @@ async function loadRouteData(routeName) {
       settlements.value = pageData.settlements || []
     }
     if (routeName === 'stats') stats.value = pageData.stats || { total: 0, count: 0, average: 0, by_category: [], by_member: [], monthly: [] }
-    if (routeName === 'group' && featureData) {
+    if (routeName === 'settings' && featureData) {
       telegramNotificationTypes.value = featureData[0]?.notification_types || []
       telegramConfigured.value = Boolean(featureData[0]?.telegram_configured)
       telegramConnected.value = Boolean(featureData[1]?.telegram?.connected)
       telegramUsername.value = featureData[1]?.telegram?.username || featureData[1]?.telegram?.first_name || ''
+      appNotificationTypes.value = featureData[2]?.notification_types || notificationOptions.map((item) => item.value)
     }
+    await loadNotifications()
   } catch (reason) {
     if (requestId === routeDataRequestId && route.name === routeName) error.value = reason.message
   } finally {
@@ -773,6 +846,17 @@ async function saveTelegramSettings() {
   finally { telegramSaving.value = false }
 }
 
+async function saveNotificationSettings() {
+  notificationSaving.value = true
+  error.value = ''
+  try {
+    const data = await postJson('gastoteca/save_notification_settings', await freshToken(true), { notification_types: appNotificationTypes.value })
+    appNotificationTypes.value = data.notification_types || []
+    flash('Preferencias de notificaciones guardadas.')
+  } catch (reason) { error.value = reason.message }
+  finally { notificationSaving.value = false }
+}
+
 async function beginTelegramLink() {
   error.value = ''
   try {
@@ -1043,6 +1127,7 @@ async function joinGroup() {
     stats.value = data.stats
     settlements.value = data.settlements || []
     joinCode.value = ''
+    await loadNotifications()
     flash('Ya formas parte del grupo.')
   } catch (reason) { error.value = reason.message }
 }
@@ -1054,12 +1139,14 @@ async function leaveGroup() {
     expenses.value = data.expenses
     stats.value = data.stats
     settlements.value = data.settlements || []
+    await loadNotifications()
     flash('Has creado un nuevo grupo personal.')
   } catch (reason) { error.value = reason.message }
 }
 
 watch(() => route.name, () => {
   menuOpen.value = false
+  notificationsOpen.value = false
   error.value = ''
   if (route.name === 'establishments' || route.name === 'categories') prepareCatalogDraft()
   window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -1109,11 +1196,18 @@ watch(loadMoreSentinel, (element) => {
 onBeforeUnmount(() => {
   expenseObserver?.disconnect()
   window.clearTimeout(iconPickerSearchTimer)
+  window.clearInterval(notificationsPollTimer)
   window.removeEventListener('keydown', handleHeaderEscape)
+  document.removeEventListener('visibilitychange', refreshNotificationsWhenVisible)
 })
+
+function refreshNotificationsWhenVisible() {
+  if (document.visibilityState === 'visible' && user.value) loadNotifications()
+}
 
 function dismissHeaderMenu() {
   menuOpen.value = false
+  notificationsOpen.value = false
 }
 
 function dismissSmartSelectOutside(event) {
@@ -1131,6 +1225,11 @@ function handleHeaderEscape(event) {
     closeIconPicker()
     return
   }
+  if (notificationsOpen.value) {
+    notificationsOpen.value = false
+    document.querySelector('.notification-trigger')?.focus()
+    return
+  }
   if (!menuOpen.value) return
   dismissHeaderMenu()
   document.querySelector('.menu-trigger')?.focus()
@@ -1138,11 +1237,16 @@ function handleHeaderEscape(event) {
 
 function navigateTo(path) {
   menuOpen.value = false
+  notificationsOpen.value = false
   router.push(path)
 }
 
 onMounted(async () => {
   window.addEventListener('keydown', handleHeaderEscape)
+  document.addEventListener('visibilitychange', refreshNotificationsWhenVisible)
+  notificationsPollTimer = window.setInterval(() => {
+    if (document.visibilityState === 'visible' && user.value) loadNotifications()
+  }, 30000)
   if (!hasFirebaseConfig()) {
     error.value = 'Falta configurar Firebase en .env.local.'
     loading.value = false
@@ -1160,6 +1264,8 @@ onMounted(async () => {
         expenses.value = []
         settlements.value = []
         group.value = null
+        notifications.value = []
+        unreadNotificationCount.value = 0
         stats.value = { total: 0, count: 0, average: 0, by_category: [], by_member: [], monthly: [] }
       }
       loading.value = false
@@ -1206,6 +1312,36 @@ onMounted(async () => {
             <component :is="item.icon" :size="19" weight="regular" /><span>{{ item.label }}</span>
           </button>
         </nav>
+      </div>
+      <div v-if="user" class="notification-center" @click.stop>
+        <button
+          type="button"
+          class="icon-button notification-trigger"
+          :aria-label="unreadNotificationCount ? `Notificaciones, ${unreadNotificationCount} sin leer` : 'Notificaciones'"
+          :aria-expanded="notificationsOpen"
+          aria-controls="notifications-panel"
+          title="Notificaciones"
+          @click="notificationsOpen = !notificationsOpen; menuOpen = false"
+        >
+          <PhBell :size="21" weight="regular" />
+          <span v-if="unreadNotificationCount" class="notification-count">{{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}</span>
+        </button>
+        <section v-if="notificationsOpen" id="notifications-panel" class="notifications-panel" aria-label="Notificaciones recientes">
+          <header class="notifications-heading">
+            <div><strong>Notificaciones</strong><span v-if="unreadNotificationCount">{{ unreadNotificationCount }} sin leer</span></div>
+            <button type="button" class="mark-all-read" :disabled="!unreadNotificationCount || markingAllNotifications" @click="markAllNotificationsRead">{{ markingAllNotifications ? 'Guardando…' : 'Marcar todas como leídas' }}</button>
+          </header>
+          <div v-if="!notifications.length" class="notifications-empty"><PhBell :size="23" /><span>Todo al día. Aquí verás la actividad de tu grupo.</span></div>
+          <div v-else class="notifications-list">
+            <article v-for="notification in notifications" :key="notification.id" class="notification-item" :class="{ unread: !notification.read_at }">
+              <button type="button" class="notification-open" @click="openNotification(notification)">
+                <span class="notification-unread-dot" :class="{ visible: !notification.read_at }"></span>
+                <span class="notification-copy"><strong>{{ notification.title }}</strong><span>{{ notification.body }}</span><time>{{ notificationDateLabel(notification.created_at) }}</time></span>
+              </button>
+              <button v-if="!notification.read_at" type="button" class="notification-mark-read" :disabled="markingNotificationIds.includes(notification.id)" :aria-label="`Marcar como leída: ${notification.title}`" title="Marcar como leída" @click="markNotificationRead(notification)"><PhCheck :size="17" /></button>
+            </article>
+          </div>
+        </section>
       </div>
       <div v-if="user" class="account">
         <img v-if="user.photoURL" :src="user.photoURL" alt="" />
@@ -1455,6 +1591,44 @@ onMounted(async () => {
         </section>
       </template>
 
+      <template v-else-if="route.name === 'settings'">
+        <section class="page-heading"><div><p class="eyebrow">TU EXPERIENCIA</p><h1>Ajustes</h1><p>Elige qué avisos quieres recibir y cómo te llegan.</p></div></section>
+        <section class="settings-layout">
+          <form class="feature-panel feature-form settings-panel" @submit.prevent="saveNotificationSettings">
+            <div class="feature-panel-heading"><div><p class="eyebrow">EN LA CAMPAÑITA</p><h2>Notificaciones de la app</h2></div></div>
+            <p class="feature-hint settings-intro">Controla qué actividad aparece en tu bandeja de notificaciones. Los cambios solo afectan a tu cuenta.</p>
+            <div class="settings-options">
+              <label v-for="item in notificationOptions" :key="item.value"><input v-model="appNotificationTypes" type="checkbox" :value="item.value" /><span><strong>{{ item.label }}</strong><small>{{ item.description }}</small></span></label>
+            </div>
+            <div class="feature-form-actions"><span></span><button class="primary" :disabled="notificationSaving"><PhCheck :size="17" /> {{ notificationSaving ? 'Guardando…' : 'Guardar preferencias' }}</button></div>
+          </form>
+
+          <form class="feature-panel feature-form settings-panel" @submit.prevent="saveTelegramSettings">
+            <div class="feature-panel-heading"><div><p class="eyebrow">AVISOS EXTERNOS</p><h2>Telegram</h2></div><span class="settings-status" :class="{ connected: telegramConnected }">{{ telegramConnected ? 'Conectado' : telegramConfigured ? 'Sin conectar' : 'No disponible' }}</span></div>
+            <p v-if="!telegramConfigured" class="muted">Telegram no está configurado en el servidor. Puedes seguir usando las notificaciones de la campanita.</p>
+            <template v-else>
+              <p class="feature-hint settings-intro">{{ telegramConnected ? `Tu cuenta está conectada${telegramUsername ? ` como ${telegramUsername}` : ''}. Elige qué avisos quieres recibir por Telegram.` : 'Conecta Telegram para recibir allí los avisos que selecciones.' }}</p>
+              <div class="settings-connection-actions">
+                <button v-if="!telegramConnected && !telegramLinkUrl" type="button" class="secondary" @click="beginTelegramLink">Conectar Telegram</button>
+                <a v-if="telegramLinkUrl && !telegramConnected" class="telegram-link" :href="telegramLinkUrl" target="_blank" rel="noreferrer">Abrir Telegram para vincular <PhArrowRight :size="15" /></a>
+                <button v-if="!telegramConnected && telegramLinkUrl" type="button" class="ghost" @click="refreshTelegramStatus">Ya lo he vinculado · comprobar</button>
+                <button v-if="telegramConnected" type="button" class="ghost" @click="refreshTelegramStatus">Actualizar conexión</button>
+              </div>
+              <div class="settings-options">
+                <label v-for="item in notificationOptions" :key="item.value"><input v-model="telegramNotificationTypes" type="checkbox" :value="item.value" /><span><strong>{{ item.label }}</strong><small>{{ item.description }}</small></span></label>
+              </div>
+              <div class="feature-form-actions"><span></span><button class="primary" :disabled="telegramSaving"><PhCheck :size="17" /> {{ telegramSaving ? 'Guardando…' : 'Guardar preferencias' }}</button></div>
+            </template>
+          </form>
+
+          <article class="feature-panel settings-account-panel">
+            <div class="feature-panel-heading"><div><p class="eyebrow">CUENTA Y GRUPO</p><h2>Tu espacio</h2></div></div>
+            <div class="settings-account-row"><span class="avatar">{{ (user?.displayName || user?.email || 'U').slice(0, 1).toUpperCase() }}</span><div><strong>{{ user?.displayName || 'Tu cuenta' }}</strong><small>{{ user?.email }}</small></div></div>
+            <div class="settings-account-row"><span class="settings-group-icon"><PhUsers :size="19" /></span><div><strong>{{ group?.name || 'Tu grupo' }}</strong><small>{{ memberOptions.length }} {{ memberOptions.length === 1 ? 'persona' : 'personas' }}</small></div><button type="button" class="ghost small-action" @click="navigateTo('/grupo')">Ver grupo</button></div>
+          </article>
+        </section>
+      </template>
+
       <template v-else>
         <section class="page-heading"><div><p class="eyebrow">ESPACIO COMPARTIDO</p><h1>Tu grupo</h1><p>Invita a las personas con las que compartes gastos.</p></div></section>
         <section class="group-grid">
@@ -1469,24 +1643,6 @@ onMounted(async () => {
               <div v-for="rule in group.recurring" :key="rule.id" class="recurring-item"><span><strong>{{ rule.name }}</strong><small>{{ money(rule.amount) }} · {{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }} · Próximo: {{ dateLabel(rule.next_at) }}</small></span><button type="button" class="secondary small-action" @click="toggleRecurring(rule)">{{ rule.active ? 'Pausar' : 'Reactivar' }}</button></div>
             </div>
             <p v-else class="muted">Al crear un movimiento, puedes elegir si quieres repetirlo.</p>
-          </article>
-          <article class="group-card telegram-card">
-            <p class="eyebrow">AVISOS</p><h2>Notificaciones por Telegram</h2>
-            <p v-if="!telegramConfigured" class="muted">Telegram no está configurado en el servidor.</p>
-            <template v-else>
-              <p class="muted">{{ telegramConnected ? `Telegram conectado${telegramUsername ? ` como ${telegramUsername}` : ''}.` : 'Conecta tu cuenta para recibir los avisos que selecciones.' }}</p>
-              <button v-if="!telegramConnected && !telegramLinkUrl" type="button" class="secondary" @click="beginTelegramLink">Conectar Telegram</button>
-              <a v-if="telegramLinkUrl && !telegramConnected" class="telegram-link" :href="telegramLinkUrl" target="_blank" rel="noreferrer">Abrir Telegram para vincular</a>
-              <button v-if="!telegramConnected && telegramLinkUrl" type="button" class="ghost" @click="refreshTelegramStatus">Ya lo he vinculado · comprobar</button>
-              <button v-if="telegramConnected" type="button" class="ghost" @click="refreshTelegramStatus">Actualizar conexión</button>
-              <div class="telegram-options">
-                <label><input v-model="telegramNotificationTypes" type="checkbox" value="expense_created" /> Al crear un gasto o ingreso</label>
-                <label><input v-model="telegramNotificationTypes" type="checkbox" value="expense_updated" /> Al editar un movimiento</label>
-                <label><input v-model="telegramNotificationTypes" type="checkbox" value="expense_deleted" /> Al eliminar un movimiento</label>
-                <label><input v-model="telegramNotificationTypes" type="checkbox" value="settlement" /> Al registrar un pago entre miembros</label>
-              </div>
-              <button type="button" class="primary" :disabled="telegramSaving" @click="saveTelegramSettings">{{ telegramSaving ? 'Guardando…' : 'Guardar preferencias' }}</button>
-            </template>
           </article>
           <article class="group-card"><p class="eyebrow">OTRO GRUPO</p><h2>Unirte con un código</h2><p class="muted">Al unirte saldrás de tu grupo actual si no eres su propietario.</p><form class="inline-form" @submit.prevent="joinGroup"><input v-model="joinCode" maxlength="8" placeholder="ABCD2345" required /><button class="secondary">Unirme</button></form><button v-if="group?.owner_uid !== user.uid" class="text-danger" @click="leaveGroup">Salir del grupo actual</button></article>
         </section>
