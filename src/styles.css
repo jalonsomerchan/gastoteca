@@ -45,8 +45,9 @@ main { max-width:1400px; margin:auto; padding:4rem 4vw 6rem; }
 .modal fieldset.transaction-type { margin-top:0; margin-bottom:1.3rem; }
 .transaction-type .choice-grid>label { min-height:66px; }
 .transaction-type .choice-grid>label:first-child.selected { color:var(--terracotta); border-color:#d99579; box-shadow:0 0 0 3px #d36b4712; }
-.frequent-label { margin:.55rem 0 .35rem!important; color:var(--muted)!important; font-size:.63rem!important; text-transform:uppercase; letter-spacing:.08em; }
 .form-grid .frequent-names { display:flex; flex-wrap:wrap; gap:.38rem; margin:0; }
+.payment-method-field { display:grid; gap:.35rem; margin-top:.65rem; color:#59645f; font-size:.7rem; font-weight:700; }
+.payment-method-field .member-select { margin-top:0; }
 .frequent-names button { display:inline-flex; align-items:center; gap:.35rem; min-height:30px; padding:.34rem .62rem; color:#53615a; background:#fff; border:1px solid var(--line); border-radius:999px; font-size:.69rem; font-weight:700; }
 .frequent-names button:hover,.frequent-names button.active { color:var(--green); background:var(--soft); border-color:#aac2b5; }
 .frequent-names small { display:grid; place-items:center; min-width:17px; height:17px; padding:0 .25rem; color:var(--muted); background:#edf1ee; border-radius:999px; font-size:.56rem; }
