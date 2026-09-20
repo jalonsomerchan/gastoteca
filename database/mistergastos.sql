@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS mg_expenses (
   group_id BIGINT UNSIGNED NOT NULL,
   transaction_type ENUM('expense','income') NOT NULL DEFAULT 'expense',
   name VARCHAR(160) NOT NULL,
+  details TEXT NULL,
   is_quick TINYINT(1) NOT NULL DEFAULT 0,
   category_id BIGINT UNSIGNED NOT NULL,
   place_id BIGINT UNSIGNED NULL,
@@ -129,5 +130,76 @@ CREATE TABLE IF NOT EXISTS mg_expense_participants (
   CONSTRAINT fk_mg_participant_expense FOREIGN KEY (expense_id) REFERENCES mg_expenses(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO mg_schema_version (id, version) VALUES (1, 1)
+CREATE TABLE IF NOT EXISTS mg_tags (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  group_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(40) NOT NULL,
+  last_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mg_tag_group_name (group_id, name),
+  UNIQUE KEY uq_mg_tag_group_id (group_id, id),
+  KEY idx_mg_tag_recent (group_id, last_used_at),
+  CONSTRAINT fk_mg_tag_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mg_expense_tags (
+  expense_id BIGINT UNSIGNED NOT NULL,
+  tag_id BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (expense_id, tag_id),
+  KEY idx_mg_expense_tag_tag (tag_id),
+  CONSTRAINT fk_mg_expense_tag_expense FOREIGN KEY (expense_id) REFERENCES mg_expenses(id) ON DELETE CASCADE,
+  CONSTRAINT fk_mg_expense_tag_tag FOREIGN KEY (tag_id) REFERENCES mg_tags(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mg_settlements (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  group_id BIGINT UNSIGNED NOT NULL,
+  payer_uid VARCHAR(128) NOT NULL,
+  payee_uid VARCHAR(128) NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  paid_at DATETIME NOT NULL,
+  created_by VARCHAR(128) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_mg_settlement_group_date (group_id, paid_at),
+  CONSTRAINT fk_mg_settlement_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mg_budgets (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  group_id BIGINT UNSIGNED NOT NULL,
+  category_id BIGINT UNSIGNED NOT NULL,
+  monthly_limit DECIMAL(12,2) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mg_budget_category (group_id, category_id),
+  CONSTRAINT fk_mg_budget_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_mg_budget_category FOREIGN KEY (group_id, category_id) REFERENCES mg_categories(group_id, id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mg_recurring_expenses (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  group_id BIGINT UNSIGNED NOT NULL,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  frequency ENUM('weekly','monthly','yearly') NOT NULL,
+  payload LONGTEXT NOT NULL,
+  next_at DATETIME NOT NULL,
+  created_by VARCHAR(128) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_mg_recurring_due (group_id, active, next_at),
+  CONSTRAINT fk_mg_recurring_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mg_telegram_preferences (
+  group_id BIGINT UNSIGNED NOT NULL,
+  uid VARCHAR(128) NOT NULL,
+  notification_types VARCHAR(255) NOT NULL DEFAULT '[]',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (group_id, uid),
+  CONSTRAINT fk_mg_telegram_preferences_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO mg_schema_version (id, version) VALUES (1, 2)
 ON DUPLICATE KEY UPDATE version = VALUES(version);

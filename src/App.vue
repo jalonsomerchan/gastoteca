@@ -45,13 +45,27 @@ const token = ref('')
 const error = ref('')
 const notice = ref('')
 const expenses = ref([])
+const settlements = ref([])
 const group = ref(null)
 const stats = ref({ total: 0, count: 0, average: 0, by_category: [], by_member: [], monthly: [] })
 const modalOpen = ref(false)
 const quickExpenseMode = ref(false)
 const quickAmount = ref('')
 const quickAmountInput = ref(null)
+const tagInput = ref('')
 const deleteTarget = ref(null)
+const settlementTarget = ref(null)
+const recurringDeleteTarget = ref(null)
+const tagDeleteTarget = ref(null)
+const settlementDraft = reactive({ payer_uid: '', payee_uid: '', amount: '' })
+const budgetDraft = reactive({ category: 'food', monthly_limit: '' })
+const tagDraft = reactive({ id: '', name: '' })
+const telegramNotificationTypes = ref([])
+const telegramConfigured = ref(false)
+const telegramConnected = ref(false)
+const telegramUsername = ref('')
+const telegramLinkUrl = ref('')
+const telegramSaving = ref(false)
 const filters = reactive({ search: '', category: '', from: '', to: '' })
 const filtersOpen = ref(false)
 const visibleExpenseCount = ref(20)
@@ -109,14 +123,18 @@ const categories = computed(() => [
 const emptyDraft = () => {
   const now = new Date()
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-  return { id: '', transaction_type: '', name: '', category: 'food', place: '', city: '', occurred_at: local, amount: '', paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [], is_quick: false }
+  return { id: '', transaction_type: '', name: '', details: '', category: 'food', place: '', city: '', occurred_at: local, amount: '', paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [], participant_shares: {}, share_mode: 'equal', tags: [], recurrence: 'none', is_quick: false }
 }
 const draft = reactive(emptyDraft())
 
 const memberOptions = computed(() => group.value?.members || [])
 const currentMember = computed(() => memberOptions.value.find((member) => member.uid === user.value?.uid))
+const recurringDraft = reactive({ id: '', transaction_type: 'expense', name: '', amount: '', category: 'bills', frequency: 'monthly', next_at: emptyDraft().occurred_at, paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [], participant_shares: {}, share_mode: 'equal', tags: [] })
 const maxCategoryTotal = computed(() => Math.max(1, ...stats.value.by_category.map((item) => Number(item.total))))
 const categoryOptions = computed(() => categories.value.map((item) => ({ value: item.id, label: item.label })))
+const tagOptions = computed(() => (group.value?.tags || []).map((item) => item.name))
+const splitMembers = computed(() => draft.applies_to_all ? memberOptions.value : memberOptions.value.filter((member) => draft.participant_uids.includes(member.uid)))
+const recurringSplitMembers = computed(() => recurringDraft.applies_to_all ? memberOptions.value : memberOptions.value.filter((member) => recurringDraft.participant_uids.includes(member.uid)))
 const cityOptions = computed(() => [...new Set([
   group.value?.default_city,
   detectedCity.value,
@@ -136,7 +154,7 @@ const establishmentOptions = computed(() => {
 })
 const filteredExpenses = computed(() => expenses.value.filter((expense) => {
   const term = filters.search.trim().toLowerCase()
-  return (!term || `${expense.name} ${expense.place} ${expense.city || ''}`.toLowerCase().includes(term)) &&
+  return (!term || `${expense.name} ${expense.details || ''} ${expense.place} ${expense.city || ''} ${(expense.tags || []).join(' ')}`.toLowerCase().includes(term)) &&
     (!filters.category || expense.category === filters.category) &&
     (!filters.from || expense.occurred_at.slice(0, 10) >= filters.from) &&
     (!filters.to || expense.occurred_at.slice(0, 10) <= filters.to)
@@ -220,15 +238,42 @@ const iconPickerSearchCollections = computed(() => Object.fromEntries(iconPicker
 const visibleExpenses = computed(() => filteredExpenses.value.slice(0, visibleExpenseCount.value))
 const hasMoreExpenses = computed(() => visibleExpenseCount.value < filteredExpenses.value.length)
 const activeFilterCount = computed(() => Object.values(filters).filter(Boolean).length)
-const balanceSummary = computed(() => expenses.value.reduce((balance, expense) => {
-  if ((expense.transaction_type || 'expense') !== 'expense' || expense.paid_by_type !== 'person') return balance
-
-  const ownShare = Number(expense.participants?.find((participant) => participant.uid === user.value?.uid)?.share_amount || 0)
-  if (expense.paid_by_uid === user.value?.uid) {
-    balance.owedToYou += Math.max(0, Number(expense.amount) - ownShare)
-  } else if (ownShare > 0) {
-    balance.youOwe += ownShare
-  }
+const pairBalances = computed(() => {
+  const balances = new Map()
+  const keyFor = (debtor, creditor) => `${debtor}::${creditor}`
+  expenses.value.forEach((expense) => {
+    if ((expense.transaction_type || 'expense') !== 'expense' || expense.paid_by_type !== 'person' || !expense.paid_by_uid) return
+    ;(expense.participants || []).forEach((participant) => {
+      if (participant.uid === expense.paid_by_uid) return
+      const key = keyFor(participant.uid, expense.paid_by_uid)
+      balances.set(key, (balances.get(key) || 0) + Number(participant.share_amount || 0))
+    })
+  })
+  settlements.value.forEach((settlement) => {
+    const key = keyFor(settlement.payer_uid, settlement.payee_uid)
+    balances.set(key, (balances.get(key) || 0) - Number(settlement.amount || 0))
+  })
+  const entries = [...balances.entries()].filter(([, amount]) => Math.abs(amount) > 0.004)
+  const handled = new Set()
+  entries.forEach(([key, amount]) => {
+    if (handled.has(key)) return
+    const [debtor, creditor] = key.split('::')
+    const reverseKey = keyFor(creditor, debtor)
+    const reverseAmount = balances.get(reverseKey) || 0
+    const net = amount - reverseAmount
+    balances.set(key, Math.max(0, net))
+    balances.set(reverseKey, Math.max(0, -net))
+    handled.add(key)
+    handled.add(reverseKey)
+  })
+  return [...balances.entries()].filter(([, amount]) => amount > 0.004).map(([key, amount]) => {
+    const [debtorUid, creditorUid] = key.split('::')
+    return { id: key, debtorUid, creditorUid, amount: Math.round(amount * 100) / 100 }
+  })
+})
+const balanceSummary = computed(() => pairBalances.value.reduce((balance, pair) => {
+  if (pair.creditorUid === user.value?.uid) balance.owedToYou += pair.amount
+  if (pair.debtorUid === user.value?.uid) balance.youOwe += pair.amount
   return balance
 }, { owedToYou: 0, youOwe: 0 }))
 const netBalance = computed(() => Math.round((balanceSummary.value.owedToYou - balanceSummary.value.youOwe) * 100) / 100)
@@ -242,48 +287,18 @@ const balanceBreakdown = computed(() => {
   const breakdown = { owedToYou: [], youOwe: [] }
   if (!currentUid) return breakdown
 
-  expenses.value.forEach((expense) => {
-    if ((expense.transaction_type || 'expense') !== 'expense' || expense.paid_by_type !== 'person') return
-
-    const payerUid = expense.paid_by_uid
-    if (!payerUid) return
-    const participants = expense.participants || []
-
-    if (payerUid === currentUid) {
-      participants.forEach((participant) => {
-        const amount = Number(participant.share_amount || 0)
-        if (participant.uid === currentUid || amount <= 0) return
-        breakdown.owedToYou.push({
-          id: `${expense.id}-${participant.uid}`,
-          expense,
-          counterpartyUid: participant.uid,
-          amount,
-        })
-      })
-      return
-    }
-
-    const ownShare = participants.find((participant) => participant.uid === currentUid)
-    const amount = Number(ownShare?.share_amount || 0)
-    if (amount > 0) {
-      breakdown.youOwe.push({
-        id: `${expense.id}-${currentUid}`,
-        expense,
-        counterpartyUid: payerUid,
-        amount,
-      })
-    }
+  pairBalances.value.forEach((pair) => {
+    if (pair.creditorUid === currentUid) breakdown.owedToYou.push({ id: pair.id, counterpartyUid: pair.debtorUid, amount: pair.amount, payerUid: pair.debtorUid, payeeUid: pair.creditorUid })
+    if (pair.debtorUid === currentUid) breakdown.youOwe.push({ id: pair.id, counterpartyUid: pair.creditorUid, amount: pair.amount, payerUid: pair.debtorUid, payeeUid: pair.creditorUid })
   })
-
-  const newestFirst = (a, b) => b.expense.occurred_at.localeCompare(a.expense.occurred_at)
-  breakdown.owedToYou.sort(newestFirst)
-  breakdown.youOwe.sort(newestFirst)
   return breakdown
 })
 
 const navigationItems = [
   { route: 'expenses', label: 'Gastos', path: '/', icon: PhReceipt },
   { route: 'stats', label: 'Estadísticas', path: '/estadisticas', icon: PhChartDonut },
+  { route: 'recurring', label: 'Recurrentes', path: '/recurrentes', icon: PhLightning },
+  { route: 'tags', label: 'Etiquetas', path: '/etiquetas', icon: PhTag },
   { route: 'establishments', label: 'Establecimientos', path: '/establecimientos', icon: PhMapPin },
   { route: 'categories', label: 'Categorías', path: '/categorias', icon: PhTag },
   { route: 'group', label: 'Grupo', path: '/grupo', icon: PhUsers },
@@ -343,7 +358,7 @@ async function detectCurrentCity() {
     draft.city = draft.city || group.value?.default_city || ''
     locationStatus.value = group.value?.default_city
       ? 'Usando la ciudad predeterminada del grupo.'
-      : 'No se pudo detectar. Puedes escribir la ciudad.'
+      : 'No se pudo detectar; puedes dejarla en blanco o escribirla.'
   } finally {
     detectingCity.value = false
   }
@@ -376,13 +391,27 @@ async function loadRouteData(routeName) {
     if (routeName === 'stats') {
       requests.push(getJson('gastoteca/statistics', authToken))
     }
+    const featureRequest = routeName === 'group' ? Promise.all([
+        getJson('gastoteca/telegram_settings', authToken),
+        getJson('menudiario/telegram_status', authToken).catch(() => null),
+      ]) : Promise.resolve(null)
 
     const [groupData, pageData] = await Promise.all(requests)
+    const featureData = await featureRequest
     if (requestId !== routeDataRequestId || route.name !== routeName || !user.value) return
 
     group.value = groupData.group
-    if (routeName === 'expenses' || routeName === 'balance') expenses.value = pageData.expenses || []
+    if (routeName === 'expenses' || routeName === 'balance') {
+      expenses.value = pageData.expenses || []
+      settlements.value = pageData.settlements || []
+    }
     if (routeName === 'stats') stats.value = pageData.stats || { total: 0, count: 0, average: 0, by_category: [], by_member: [], monthly: [] }
+    if (routeName === 'group' && featureData) {
+      telegramNotificationTypes.value = featureData[0]?.notification_types || []
+      telegramConfigured.value = Boolean(featureData[0]?.telegram_configured)
+      telegramConnected.value = Boolean(featureData[1]?.telegram?.connected)
+      telegramUsername.value = featureData[1]?.telegram?.username || featureData[1]?.telegram?.first_name || ''
+    }
   } catch (reason) {
     if (requestId === routeDataRequestId && route.name === routeName) error.value = reason.message
   } finally {
@@ -408,12 +437,17 @@ function openExpense(expense = null) {
   error.value = ''
   quickExpenseMode.value = false
   quickAmount.value = ''
+  tagInput.value = ''
   Object.assign(draft, emptyDraft(), expense ? {
     ...expense,
     transaction_type: expense.transaction_type || 'expense',
     amount: Number(expense.amount).toFixed(2),
     occurred_at: expense.occurred_at.replace(' ', 'T').slice(0, 16),
     participant_uids: [...(expense.participant_uids || [])],
+    participant_shares: Object.fromEntries((expense.participants || []).map((participant) => [participant.uid, Number(participant.share_amount).toFixed(2)])),
+    share_mode: 'amount',
+    tags: [...(expense.tags || [])],
+    recurrence: 'none',
   } : {})
   if (!draft.paid_by_uid) draft.paid_by_uid = currentMember.value?.uid || memberOptions.value[0]?.uid || ''
   if (!expense) draft.city = group.value?.default_city || ''
@@ -459,6 +493,7 @@ async function saveQuickExpense() {
     const data = await postJson('gastoteca/save_expense', await freshToken(true), quickDraft)
     expenses.value = data.expenses
     stats.value = data.stats
+    settlements.value = data.settlements || settlements.value
     if (data.group) group.value = data.group
     closeExpenseModal()
     flash('Gasto rápido guardado. Puedes completarlo desde la lista.')
@@ -499,14 +534,248 @@ function selectFrequentName(suggestion) {
   if (!draft.applies_to_all && !validParticipants.length) draft.applies_to_all = true
 }
 
+function setShareMode(mode) {
+  const previousMode = draft.share_mode
+  const members = splitMembers.value
+  const amount = Number(draft.amount) || 0
+  const previousValues = Object.fromEntries(members.map((member, index) => [member.uid, Number(shareValue(member, index)) || 0]))
+  draft.share_mode = mode
+  if (mode === 'equal') return
+  let used = 0
+  members.forEach((member, index) => {
+    const last = index === members.length - 1
+    if (mode === 'percent') {
+      const percent = previousMode === 'percent'
+        ? previousValues[member.uid]
+        : last ? 100 - used : amount > 0 ? previousValues[member.uid] / amount * 100 : 100 / Math.max(1, members.length)
+      draft.participant_shares[member.uid] = Math.max(0, percent).toFixed(2)
+      used += Number(draft.participant_shares[member.uid])
+    } else {
+      const share = previousMode === 'amount'
+        ? previousValues[member.uid]
+        : last ? amount - used : previousMode === 'percent' ? amount * previousValues[member.uid] / 100 : amount / Math.max(1, members.length)
+      draft.participant_shares[member.uid] = Math.max(0, share).toFixed(2)
+      used += Number(draft.participant_shares[member.uid])
+    }
+  })
+}
+
+function shareValue(member, index) {
+  const value = draft.participant_shares[member.uid]
+  if (value !== undefined) return value
+  const count = Math.max(1, splitMembers.value.length)
+  if (draft.share_mode === 'percent') return (100 / count).toFixed(2)
+  const total = Number(draft.amount) || 0
+  return (index === count - 1 ? total - (total / count) * index : total / count).toFixed(2)
+}
+
+function addDraftTag(value = tagInput.value) {
+  const name = String(value || '').trim().slice(0, 40)
+  if (!name || draft.tags.some((tag) => normalizeName(tag) === normalizeName(name)) || draft.tags.length >= 10) return
+  draft.tags.push(name)
+  tagInput.value = ''
+}
+
+function openSettlement(entry, isOwedToYou) {
+  settlementTarget.value = entry
+  settlementDraft.payer_uid = isOwedToYou ? entry.counterpartyUid : user.value?.uid || ''
+  settlementDraft.payee_uid = isOwedToYou ? user.value?.uid || '' : entry.counterpartyUid
+  settlementDraft.amount = Number(entry.amount).toFixed(2)
+}
+
+async function saveSettlement() {
+  error.value = ''
+  saving.value = true
+  try {
+    const data = await postJson('gastoteca/save_settlement', await freshToken(true), { ...settlementDraft })
+    settlements.value = data.settlements || []
+    settlementTarget.value = null
+    flash('Pago registrado; el balance pendiente se ha actualizado.')
+  } catch (reason) {
+    error.value = reason.message
+  } finally {
+    saving.value = false
+  }
+}
+
+async function saveBudget() {
+  error.value = ''
+  saving.value = true
+  try {
+    const data = await postJson('gastoteca/save_budget', await freshToken(true), { ...budgetDraft })
+    group.value = data.group
+    budgetDraft.monthly_limit = ''
+    flash('Presupuesto mensual guardado.')
+  } catch (reason) {
+    error.value = reason.message
+  } finally {
+    saving.value = false
+  }
+}
+
+async function deleteBudget(categoryKey) {
+  try {
+    const data = await postJson('gastoteca/delete_budget', await freshToken(true), { category: categoryKey })
+    group.value = data.group
+    flash('Presupuesto eliminado.')
+  } catch (reason) { error.value = reason.message }
+}
+
+async function toggleRecurring(rule) {
+  try {
+    const data = await postJson('gastoteca/toggle_recurring', await freshToken(true), { id: rule.id, active: !rule.active })
+    group.value = data.group
+    flash(rule.active ? 'Repetición pausada.' : 'Repetición reactivada.')
+  } catch (reason) { error.value = reason.message }
+}
+
+function startRecurringRule(rule = null) {
+  const payload = rule?.payload || {}
+  const validParticipants = (payload.participant_uids || []).filter((uid) => memberOptions.value.some((member) => member.uid === uid))
+  Object.assign(recurringDraft, {
+    id: rule?.id || '',
+    transaction_type: payload.transaction_type || 'expense',
+    name: payload.name || '',
+    amount: payload.amount ? Number(payload.amount).toFixed(2) : '',
+    category: payload.category || 'bills',
+    frequency: rule?.frequency || 'monthly',
+    next_at: (rule?.next_at || emptyDraft().occurred_at).replace(' ', 'T').slice(0, 16),
+    paid_by_type: payload.paid_by_type || 'person',
+    paid_by_uid: memberOptions.value.some((member) => member.uid === payload.paid_by_uid) ? payload.paid_by_uid : (currentMember.value?.uid || memberOptions.value[0]?.uid || ''),
+    applies_to_all: payload.applies_to_all ?? true,
+    participant_uids: validParticipants,
+    participant_shares: Object.fromEntries(Object.entries(payload.participant_shares || {}).map(([uid, amount]) => [uid, Number(amount).toFixed(2)])),
+    share_mode: rule && Object.keys(payload.participant_shares || {}).length ? 'amount' : 'equal',
+    tags: [...(payload.tags || [])],
+  })
+  if (!recurringDraft.applies_to_all && !recurringDraft.participant_uids.length) recurringDraft.applies_to_all = true
+  error.value = ''
+}
+
+function recurringShareValue(member, index) {
+  const value = recurringDraft.participant_shares[member.uid]
+  if (value !== undefined) return value
+  const count = Math.max(1, recurringSplitMembers.value.length)
+  const amount = Number(recurringDraft.amount) || 0
+  return (index === count - 1 ? amount - (amount / count) * index : amount / count).toFixed(2)
+}
+
+function resetRecurringShares() {
+  const members = recurringSplitMembers.value
+  const amount = Number(recurringDraft.amount) || 0
+  let used = 0
+  recurringDraft.participant_shares = Object.fromEntries(members.map((member, index) => {
+    const share = index === members.length - 1 ? amount - used : Math.round((amount / Math.max(1, members.length)) * 100) / 100
+    used += share
+    return [member.uid, Math.max(0, share).toFixed(2)]
+  }))
+}
+
+function setRecurringShareMode(mode) {
+  recurringDraft.share_mode = mode
+  if (mode === 'amount') resetRecurringShares()
+}
+
+async function saveRecurring() {
+  error.value = ''
+  if (!recurringDraft.name.trim() || Number(recurringDraft.amount) <= 0) {
+    error.value = 'Añade un nombre y un importe mayor que cero.'
+    return
+  }
+  if (!recurringDraft.applies_to_all && !recurringDraft.participant_uids.length) {
+    error.value = 'Selecciona al menos una persona a la que se aplica el movimiento.'
+    return
+  }
+  const wasEditing = Boolean(recurringDraft.id)
+  saving.value = true
+  try {
+    const data = await postJson('gastoteca/save_recurring', await freshToken(true), {
+      ...recurringDraft,
+      amount: Number(recurringDraft.amount),
+      participant_shares: Object.fromEntries(recurringSplitMembers.value.map((member, index) => [member.uid, Number(recurringShareValue(member, index)) || 0])),
+    })
+    group.value = data.group
+    startRecurringRule()
+    flash(wasEditing ? 'Programación actualizada.' : 'Movimiento recurrente guardado.')
+  } catch (reason) { error.value = reason.message }
+  finally { saving.value = false }
+}
+
+async function removeRecurring() {
+  if (!recurringDeleteTarget.value) return
+  saving.value = true
+  try {
+    const data = await postJson('gastoteca/delete_recurring', await freshToken(true), { id: recurringDeleteTarget.value.id })
+    group.value = data.group
+    recurringDeleteTarget.value = null
+    if (recurringDraft.id && !group.value.recurring.some((rule) => rule.id === recurringDraft.id)) startRecurringRule()
+    flash('Programación eliminada.')
+  } catch (reason) { error.value = reason.message }
+  finally { saving.value = false }
+}
+
+async function saveTag() {
+  error.value = ''
+  if (!tagDraft.name.trim()) {
+    error.value = 'Escribe un nombre para la etiqueta.'
+    return
+  }
+  saving.value = true
+  try {
+    const data = await postJson('gastoteca/save_tag', await freshToken(true), { ...tagDraft })
+    group.value = data.group
+    const wasEditing = Boolean(tagDraft.id)
+    Object.assign(tagDraft, { id: '', name: '' })
+    flash(wasEditing ? 'Etiqueta actualizada.' : 'Etiqueta creada.')
+  } catch (reason) { error.value = reason.message }
+  finally { saving.value = false }
+}
+
+async function removeTag() {
+  if (!tagDeleteTarget.value) return
+  saving.value = true
+  try {
+    const data = await postJson('gastoteca/delete_tag', await freshToken(true), { id: tagDeleteTarget.value.id })
+    group.value = data.group
+    if (tagDraft.id === tagDeleteTarget.value.id) Object.assign(tagDraft, { id: '', name: '' })
+    tagDeleteTarget.value = null
+    flash('Etiqueta eliminada de los movimientos.')
+  } catch (reason) { error.value = reason.message }
+  finally { saving.value = false }
+}
+
+async function saveTelegramSettings() {
+  telegramSaving.value = true
+  error.value = ''
+  try {
+    const data = await postJson('gastoteca/save_telegram_settings', await freshToken(true), { notification_types: telegramNotificationTypes.value })
+    telegramNotificationTypes.value = data.notification_types || []
+    flash('Preferencias de Telegram guardadas.')
+  } catch (reason) { error.value = reason.message }
+  finally { telegramSaving.value = false }
+}
+
+async function beginTelegramLink() {
+  error.value = ''
+  try {
+    const data = await postJson('menudiario/telegram_link', await freshToken(true), {})
+    telegramLinkUrl.value = data.url || ''
+    telegramConfigured.value = true
+  } catch (reason) { error.value = reason.message }
+}
+
+async function refreshTelegramStatus() {
+  try {
+    const data = await getJson('menudiario/telegram_status', await freshToken(true))
+    telegramConnected.value = Boolean(data.telegram?.connected)
+    telegramUsername.value = data.telegram?.username || data.telegram?.first_name || ''
+  } catch (reason) { error.value = reason.message }
+}
+
 async function saveExpense() {
   error.value = ''
   if (!draft.transaction_type) {
     error.value = 'Selecciona si es un gasto o un ingreso.'
-    return
-  }
-  if (!draft.city.trim()) {
-    error.value = 'Selecciona o escribe la ciudad del movimiento.'
     return
   }
   if (!draft.name.trim() || !draft.amount || Number(draft.amount) <= 0) {
@@ -514,14 +783,26 @@ async function saveExpense() {
     return
   }
   if (!draft.applies_to_all && !draft.participant_uids.length) {
-    error.value = 'Selecciona al menos una persona a la que se aplica el gasto.'
+    error.value = 'Selecciona al menos una persona a la que se aplica el movimiento.'
+    return
+  }
+  if (draft.share_mode !== 'equal' && !splitMembers.value.length) {
+    error.value = 'Selecciona participantes antes de personalizar el reparto.'
     return
   }
   saving.value = true
   try {
-    const data = await postJson('gastoteca/save_expense', await freshToken(true), { ...draft, is_quick: false })
+    const data = await postJson('gastoteca/save_expense', await freshToken(true), {
+      ...draft,
+      city: draft.city || group.value?.default_city || 'Sin ciudad',
+      details: draft.details || '',
+      occurred_at: draft.occurred_at || emptyDraft().occurred_at,
+      participant_shares: Object.fromEntries(splitMembers.value.map((member, index) => [member.uid, Number(shareValue(member, index)) || 0])),
+      is_quick: false,
+    })
     expenses.value = data.expenses
     stats.value = data.stats
+    settlements.value = data.settlements || settlements.value
     if (data.group) group.value = data.group
     closeExpenseModal()
     const movement = draft.transaction_type === 'income' ? 'Ingreso' : 'Gasto'
@@ -542,6 +823,7 @@ async function removeExpense() {
     const data = await postJson('gastoteca/delete_expense', await freshToken(true), { id: target.id })
     expenses.value = data.expenses
     stats.value = data.stats
+    settlements.value = data.settlements || settlements.value
     deleteTarget.value = null
     modalOpen.value = false
     flash(`${movement} eliminado.`)
@@ -741,6 +1023,7 @@ async function joinGroup() {
     group.value = data.group
     expenses.value = data.expenses
     stats.value = data.stats
+    settlements.value = data.settlements || []
     joinCode.value = ''
     flash('Ya formas parte del grupo.')
   } catch (reason) { error.value = reason.message }
@@ -752,6 +1035,7 @@ async function leaveGroup() {
     group.value = data.group
     expenses.value = data.expenses
     stats.value = data.stats
+    settlements.value = data.settlements || []
     flash('Has creado un nuevo grupo personal.')
   } catch (reason) { error.value = reason.message }
 }
@@ -765,8 +1049,31 @@ watch(() => route.name, () => {
 })
 watch(() => group.value, () => {
   if (route.name === 'establishments' || route.name === 'categories') prepareCatalogDraft()
+  if (!recurringDraft.id && !recurringDraft.paid_by_uid) recurringDraft.paid_by_uid = currentMember.value?.uid || memberOptions.value[0]?.uid || ''
 })
 watch(() => group.value?.default_city, (city) => { defaultCityDraft.value = city || '' }, { immediate: true })
+watch(() => splitMembers.value.map((member) => member.uid).join('|'), () => {
+  if (draft.share_mode === 'equal' || !splitMembers.value.length) return
+  const members = splitMembers.value
+  const target = draft.share_mode === 'percent' ? 100 : Number(draft.amount) || 0
+  const values = members.map((member, index) => Number(shareValue(member, index)) || 0)
+  const total = values.reduce((sum, value) => sum + value, 0)
+  let remainder = target - total
+  const lastIndex = values.length - 1
+  if (values[lastIndex] + remainder >= 0) {
+    values[lastIndex] += remainder
+  } else if (total > 0) {
+    let used = 0
+    values.forEach((value, index) => {
+      values[index] = index === lastIndex ? target - used : Math.round(value / total * target * 100) / 100
+      used += values[index]
+    })
+  } else {
+    values.fill(target / values.length)
+    values[lastIndex] = target - values.slice(0, lastIndex).reduce((sum, value) => sum + value, 0)
+  }
+  members.forEach((member, index) => { draft.participant_shares[member.uid] = Math.max(0, values[index]).toFixed(2) })
+})
 watch(() => [filters.search, filters.category, filters.from, filters.to], () => { visibleExpenseCount.value = 20 })
 watch(loadMoreSentinel, (element) => {
   expenseObserver?.disconnect()
@@ -829,6 +1136,7 @@ onMounted(async () => {
         routeDataRequestId += 1
         routeLoading.value = false
         expenses.value = []
+        settlements.value = []
         group.value = null
         stats.value = { total: 0, count: 0, average: 0, by_category: [], by_member: [], monthly: [] }
       }
@@ -931,7 +1239,7 @@ onMounted(async () => {
           <div class="expense-list-heading"><h1>Movimientos</h1><span>{{ filteredExpenses.length }}</span></div>
           <article v-for="expense in visibleExpenses" :key="expense.id" class="expense-card" role="button" tabindex="0" :aria-label="`Editar movimiento: ${expense.name}`" @click="openExpense(expense)" @keydown.enter.prevent="openExpense(expense)" @keydown.space.prevent="openExpense(expense)">
             <span class="category-icon" :style="expense.place && establishmentIcon(expense.place) ? { background: '#e5efe8', color: 'var(--green)' } : { background: `${category(expense.category).color}18`, color: category(expense.category).color }"><iconify-icon v-if="expense.place && establishmentIcon(expense.place)" :icon="establishmentIcon(expense.place)"></iconify-icon><iconify-icon v-else :icon="category(expense.category).icon"></iconify-icon></span>
-            <div class="expense-main"><strong>{{ expense.name }} <em v-if="expense.transaction_type === 'income'" class="movement-type">Ingreso</em><em v-if="expense.is_quick" class="quick-pending-pill">Por completar</em></strong><span><PhMapPin :size="14" /> {{ expenseLocation(expense) }} · {{ dateLabel(expense.occurred_at) }}</span></div>
+            <div class="expense-main"><strong>{{ expense.name }} <em v-if="expense.transaction_type === 'income'" class="movement-type">Ingreso</em><em v-if="expense.is_quick" class="quick-pending-pill">Por completar</em></strong><span><PhMapPin :size="14" /> {{ expenseLocation(expense) }} · {{ dateLabel(expense.occurred_at) }}</span><small v-if="expense.details" class="expense-details">{{ expense.details }}</small><span v-if="expense.tags?.length" class="expense-tag-list"><em v-for="tag in expense.tags" :key="tag">{{ tag }}</em></span></div>
             <span class="category-pill" :style="{ color: category(expense.category).color }"><PhTag :size="13" /> {{ category(expense.category).label }}</span>
             <div class="expense-people"><span>{{ expense.transaction_type === 'income' ? 'Recibió' : 'Pagó' }}</span><strong>{{ expense.paid_by_type === 'all' ? 'Todo el grupo' : memberLabel(expense.paid_by_uid) }}</strong><small>Para {{ expense.applies_to_all ? 'todo el grupo' : expense.participant_uids.map(memberLabel).join(', ') }}</small></div>
             <strong class="expense-amount" :class="{ income: expense.transaction_type === 'income' }">{{ expense.transaction_type === 'income' ? '+' : '' }}{{ money(expense.amount) }}</strong>
@@ -958,8 +1266,8 @@ onMounted(async () => {
             <div v-if="balanceBreakdown.owedToYou.length" class="balance-entry-list">
               <article v-for="entry in balanceBreakdown.owedToYou" :key="entry.id" class="balance-entry">
                 <span class="avatar">{{ memberLabel(entry.counterpartyUid).slice(0, 1).toUpperCase() }}</span>
-                <div class="balance-entry-main"><strong>{{ memberLabel(entry.counterpartyUid) }} te debe</strong><small>{{ entry.expense.name }} · {{ dateLabel(entry.expense.occurred_at) }}</small><small>{{ expenseLocation(entry.expense) }}</small></div>
-                <b>{{ money(entry.amount) }}</b>
+              <div class="balance-entry-main"><strong>{{ memberLabel(entry.counterpartyUid) }} te debe</strong><small>Deuda neta pendiente</small></div>
+                <div class="balance-entry-actions"><b>{{ money(entry.amount) }}</b><button type="button" class="secondary small-action" @click="openSettlement(entry, true)">Registrar pago</button></div>
               </article>
             </div>
             <p v-else class="muted">No tienes importes pendientes de recibir.</p>
@@ -969,12 +1277,16 @@ onMounted(async () => {
             <div v-if="balanceBreakdown.youOwe.length" class="balance-entry-list">
               <article v-for="entry in balanceBreakdown.youOwe" :key="entry.id" class="balance-entry">
                 <span class="avatar">{{ memberLabel(entry.counterpartyUid).slice(0, 1).toUpperCase() }}</span>
-                <div class="balance-entry-main"><strong>Debes a {{ memberLabel(entry.counterpartyUid) }}</strong><small>{{ entry.expense.name }} · {{ dateLabel(entry.expense.occurred_at) }}</small><small>{{ expenseLocation(entry.expense) }}</small></div>
-                <b>{{ money(entry.amount) }}</b>
+                <div class="balance-entry-main"><strong>Debes a {{ memberLabel(entry.counterpartyUid) }}</strong><small>Deuda neta pendiente</small></div>
+                <div class="balance-entry-actions"><b>{{ money(entry.amount) }}</b><button type="button" class="secondary small-action" @click="openSettlement(entry, false)">Registrar pago</button></div>
               </article>
             </div>
             <p v-else class="muted">No tienes importes pendientes de pagar.</p>
           </article>
+        </section>
+        <section v-if="settlements.length" class="chart-card settlement-history">
+          <div class="card-title"><div><p class="eyebrow">HISTORIAL</p><h2>Pagos registrados</h2></div></div>
+          <div class="settlement-history-list"><p v-for="item in settlements.slice(0, 8)" :key="item.id"><span><strong>{{ memberLabel(item.payer_uid) }}</strong> pagó a <strong>{{ memberLabel(item.payee_uid) }}</strong></span><small>{{ dateLabel(item.paid_at) }}</small><b>{{ money(item.amount) }}</b></p></div>
         </section>
       </template>
 
@@ -995,6 +1307,21 @@ onMounted(async () => {
             <div class="card-title"><div><p class="eyebrow">PERSONAS</p><h2>Quién ha pagado</h2></div></div>
             <div class="member-stat"><div v-for="item in stats.by_member" :key="item.uid || 'all'"><span class="avatar">{{ item.uid ? memberLabel(item.uid).slice(0, 1).toUpperCase() : '∑' }}</span><p><strong>{{ item.uid ? memberLabel(item.uid) : 'Todo el grupo' }}</strong><small>{{ item.count }} gastos</small></p><b>{{ money(item.total) }}</b></div><p v-if="!stats.by_member.length" class="muted">Aún no hay datos.</p></div>
           </article>
+        </section>
+        <section class="chart-card budget-section">
+          <div class="card-title"><div><p class="eyebrow">CONTROL DEL MES</p><h2>Presupuestos por categoría</h2></div></div>
+          <form class="budget-form" @submit.prevent="saveBudget">
+            <label><span>Categoría</span><select v-model="budgetDraft.category"><option v-for="item in categories" :key="item.id" :value="item.id">{{ item.label }}</option></select></label>
+            <label><span>Límite mensual</span><div class="money-input"><input v-model="budgetDraft.monthly_limit" type="number" min="0.01" step="0.01" placeholder="0,00" required /><b>€</b></div></label>
+            <button class="primary" :disabled="saving"><PhPlus :size="17" /> Guardar presupuesto</button>
+          </form>
+          <div v-if="group?.budgets?.length" class="budget-list">
+            <article v-for="budget in group.budgets" :key="budget.category" class="budget-item">
+              <div><strong>{{ budget.label }}</strong><span>{{ money(budget.current_total) }} de {{ money(budget.monthly_limit) }}</span><button type="button" class="text-danger budget-delete" @click="deleteBudget(budget.category)">Eliminar</button></div>
+              <div class="budget-track"><span :class="{ exceeded: Number(budget.current_total) > Number(budget.monthly_limit) }" :style="{ width: `${Math.min(100, Number(budget.current_total) / Number(budget.monthly_limit) * 100)}%` }"></span></div>
+            </article>
+          </div>
+          <p v-else class="muted">Aún no hay presupuestos para este grupo.</p>
         </section>
       </template>
 
@@ -1020,6 +1347,75 @@ onMounted(async () => {
         </section>
       </template>
 
+      <template v-else-if="route.name === 'recurring'">
+        <section class="page-heading">
+          <div><p class="eyebrow">AUTOMATIZACIONES DEL GRUPO</p><h1>Gastos recurrentes</h1><p>Configura gastos e ingresos que se añadirán automáticamente cuando llegue su fecha.</p></div>
+          <button v-if="recurringDraft.id" type="button" class="ghost" @click="startRecurringRule()">Nueva programación</button>
+        </section>
+        <section class="feature-layout">
+          <form class="feature-panel feature-form" @submit.prevent="saveRecurring">
+            <div class="feature-panel-heading"><div><p class="eyebrow">{{ recurringDraft.id ? 'EDITAR PROGRAMACIÓN' : 'NUEVA PROGRAMACIÓN' }}</p><h2>{{ recurringDraft.id ? 'Ajusta los detalles' : 'Añade un movimiento' }}</h2></div></div>
+            <div class="feature-fields">
+              <label><span>Tipo</span><select v-model="recurringDraft.transaction_type"><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
+              <label><span>Frecuencia</span><select v-model="recurringDraft.frequency"><option value="weekly">Cada semana</option><option value="monthly">Cada mes</option><option value="yearly">Cada año</option></select></label>
+              <label class="feature-field-wide"><span>Nombre</span><input v-model="recurringDraft.name" maxlength="160" :placeholder="recurringDraft.transaction_type === 'income' ? 'Nómina o ingreso recurrente' : 'Alquiler, suscripción…'" required /></label>
+              <label><span>Importe</span><div class="money-input"><input v-model="recurringDraft.amount" type="number" min="0.01" max="99999999" step="0.01" placeholder="0,00" required /><b>€</b></div></label>
+              <label><span>Categoría</span><select v-model="recurringDraft.category"><option v-for="item in categories" :key="item.id" :value="item.id">{{ item.label }}</option></select></label>
+              <label class="feature-field-wide"><span>Próxima fecha de aplicación</span><input v-model="recurringDraft.next_at" type="datetime-local" required /></label>
+            </div>
+            <fieldset class="feature-fieldset">
+              <legend>{{ recurringDraft.transaction_type === 'income' ? 'Quién lo recibe' : 'Quién lo paga' }}</legend>
+              <div class="feature-choice-row"><label><input v-model="recurringDraft.paid_by_type" type="radio" value="person" /> Una persona</label><label><input v-model="recurringDraft.paid_by_type" type="radio" value="all" /> Todo el grupo</label></div>
+              <select v-if="recurringDraft.paid_by_type === 'person'" v-model="recurringDraft.paid_by_uid" class="feature-select"><option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option></select>
+            </fieldset>
+            <fieldset class="feature-fieldset">
+              <legend>A quién se aplica</legend>
+              <div class="feature-choice-row"><label><input v-model="recurringDraft.applies_to_all" type="radio" :value="true" @change="resetRecurringShares" /> Todo el grupo</label><label><input v-model="recurringDraft.applies_to_all" type="radio" :value="false" @change="resetRecurringShares" /> Algunas personas</label></div>
+              <div v-if="!recurringDraft.applies_to_all" class="check-members"><label v-for="member in memberOptions" :key="member.uid"><input v-model="recurringDraft.participant_uids" type="checkbox" :value="member.uid" @change="resetRecurringShares" /><span class="avatar">{{ (member.name || member.email).slice(0, 1).toUpperCase() }}</span>{{ member.name || member.email }}</label></div>
+              <div class="feature-split-heading"><span>Reparto</span><label><input :checked="recurringDraft.share_mode === 'equal'" type="radio" @change="setRecurringShareMode('equal')" /> Por igual</label><label><input :checked="recurringDraft.share_mode === 'amount'" type="radio" @change="setRecurringShareMode('amount')" /> Personalizado</label></div>
+              <div v-if="recurringDraft.share_mode === 'amount'" class="feature-share-list"><label v-for="member in recurringSplitMembers" :key="member.uid"><span>{{ member.name || member.email }}</span><div class="money-input"><input v-model="recurringDraft.participant_shares[member.uid]" type="number" min="0" step="0.01" :aria-label="`Parte de ${member.name || member.email}`" /><b>€</b></div></label></div>
+            </fieldset>
+            <fieldset v-if="group?.tags?.length" class="feature-fieldset">
+              <legend>Etiquetas</legend>
+              <div class="feature-tag-options"><label v-for="tag in group.tags" :key="tag.id"><input v-model="recurringDraft.tags" type="checkbox" :value="tag.name" /> {{ tag.name }}</label></div>
+            </fieldset>
+            <div class="feature-form-actions"><button v-if="recurringDraft.id" type="button" class="text-danger" @click="recurringDeleteTarget = { id: recurringDraft.id, name: recurringDraft.name }">Eliminar programación</button><span></span><button v-if="recurringDraft.id" type="button" class="ghost" @click="startRecurringRule()">Cancelar</button><button class="primary" :disabled="saving"><PhCheck :size="17" /> {{ saving ? 'Guardando…' : 'Guardar' }}</button></div>
+          </form>
+          <section class="feature-panel feature-list-panel">
+            <div class="feature-panel-heading"><div><p class="eyebrow">PROGRAMACIONES</p><h2>Movimientos automáticos</h2></div><span class="feature-count">{{ group?.recurring?.length || 0 }}</span></div>
+            <div v-if="group?.recurring?.length" class="feature-list">
+              <article v-for="rule in group.recurring" :key="rule.id" class="feature-list-row">
+                <div class="feature-list-main"><span class="feature-status-dot" :class="{ paused: !rule.active }"></span><div><strong>{{ rule.name }}</strong><small>{{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ money(rule.amount) }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }}</small><small>{{ rule.active ? 'Próximo: ' : 'Pausado · Próximo: ' }}{{ dateLabel(rule.next_at) }}</small></div></div>
+                <div class="feature-row-actions"><button type="button" class="ghost small-action" @click="startRecurringRule(rule)">Editar</button><button type="button" class="secondary small-action" @click="toggleRecurring(rule)">{{ rule.active ? 'Pausar' : 'Reactivar' }}</button></div>
+              </article>
+            </div>
+            <div v-else class="feature-empty"><PhLightning :size="27" /><strong>Aún no hay programaciones</strong><p>Configura aquí el alquiler, las suscripciones o los ingresos que se repiten.</p></div>
+          </section>
+        </section>
+      </template>
+
+      <template v-else-if="route.name === 'tags'">
+        <section class="page-heading"><div><p class="eyebrow">ORGANIZA TUS MOVIMIENTOS</p><h1>Etiquetas</h1><p>Crea y renombra etiquetas para encontrar mejor tus gastos e ingresos.</p></div></section>
+        <section class="feature-layout tag-layout">
+          <form class="feature-panel feature-form tag-editor" @submit.prevent="saveTag">
+            <div class="feature-panel-heading"><div><p class="eyebrow">{{ tagDraft.id ? 'EDITAR ETIQUETA' : 'NUEVA ETIQUETA' }}</p><h2>{{ tagDraft.id ? 'Cambia su nombre' : 'Crea una etiqueta' }}</h2></div></div>
+            <label><span>Nombre</span><input v-model="tagDraft.name" maxlength="40" placeholder="Por ejemplo: vacaciones" required /></label>
+            <p class="feature-hint">Las etiquetas recientes también aparecen al registrar un movimiento.</p>
+            <div class="feature-form-actions"><button v-if="tagDraft.id" type="button" class="ghost" @click="Object.assign(tagDraft, { id: '', name: '' })">Cancelar</button><span v-else></span><button class="primary" :disabled="saving"><PhCheck :size="17" /> {{ saving ? 'Guardando…' : tagDraft.id ? 'Guardar cambios' : 'Crear etiqueta' }}</button></div>
+          </form>
+          <section class="feature-panel feature-list-panel">
+            <div class="feature-panel-heading"><div><p class="eyebrow">CATÁLOGO DEL GRUPO</p><h2>Etiquetas disponibles</h2></div><span class="feature-count">{{ group?.tags?.length || 0 }}</span></div>
+            <div v-if="group?.tags?.length" class="feature-list">
+              <article v-for="tag in group.tags" :key="tag.id" class="feature-list-row">
+                <div class="feature-list-main"><span class="tag-chip"><PhTag :size="15" /> {{ tag.name }}</span><small>{{ tag.usage_count }} {{ tag.usage_count === 1 ? 'movimiento' : 'movimientos' }} · Último uso {{ dateLabel(tag.last_used_at) }}</small></div>
+                <div class="feature-row-actions"><button type="button" class="ghost small-action" @click="Object.assign(tagDraft, { id: tag.id, name: tag.name })">Editar</button><button type="button" class="danger-button small-action" @click="tagDeleteTarget = tag">Eliminar</button></div>
+              </article>
+            </div>
+            <div v-else class="feature-empty"><PhTag :size="27" /><strong>Aún no hay etiquetas</strong><p>Crea una etiqueta aquí o al añadir un movimiento.</p></div>
+          </section>
+        </section>
+      </template>
+
       <template v-else>
         <section class="page-heading"><div><p class="eyebrow">ESPACIO COMPARTIDO</p><h1>Tu grupo</h1><p>Invita a las personas con las que compartes gastos.</p></div></section>
         <section class="group-grid">
@@ -1027,6 +1423,31 @@ onMounted(async () => {
           <article class="group-card"><p class="eyebrow">MIEMBROS</p><h2>Personas del grupo</h2><div class="members"><div v-for="member in memberOptions" :key="member.uid"><span class="avatar">{{ (member.name || member.email).slice(0, 1).toUpperCase() }}</span><p><strong>{{ member.name || member.email }}</strong><small>{{ member.uid === group?.owner_uid ? 'Propietario' : member.email }}</small></p><span v-if="member.uid === user.uid" class="you-pill">Tú</span></div></div></article>
           <article v-if="group?.owner_uid === user.uid" class="group-card"><p class="eyebrow">INVITAR</p><h2>Sumar una persona</h2><p class="muted">Enviaremos un correo. Al iniciar sesión con Google usando ese email, se unirá automáticamente.</p><form class="inline-form" @submit.prevent="invite"><input v-model="inviteEmail" type="email" placeholder="persona@ejemplo.com" required /><button class="primary" :disabled="inviteSending">{{ inviteSending ? 'Enviando…' : 'Invitar' }} <PhArrowRight :size="17" /></button></form><div v-if="group.pending_emails?.length" class="pending"><span v-for="email in group.pending_emails" :key="email">{{ email }} · pendiente</span></div></article>
           <article v-if="group?.owner_uid === user.uid" class="group-card"><p class="eyebrow">UBICACIÓN</p><h2>Ciudad predeterminada</h2><p class="muted">Se usará cuando no podamos detectar la ubicación del dispositivo.</p><form class="group-setting-form" @submit.prevent="saveGroupSettings"><Multiselect v-model="defaultCityDraft" class="smart-select" :options="cityOptions" searchable create-option allow-absent :can-clear="Boolean(defaultCityDraft)" :aria="{ 'aria-label': 'Ciudad predeterminada' }" placeholder="Escribe o busca una ciudad" no-options-text="Escribe una ciudad nueva" no-results-text="Sin coincidencias" /><button class="primary" :disabled="saving">Guardar</button></form></article>
+          <article class="group-card recurring-card">
+            <div class="feature-panel-heading"><div><p class="eyebrow">AUTOMATIZACIONES</p><h2>Movimientos recurrentes</h2></div><button type="button" class="ghost small-action" @click="router.push({ name: 'recurring' })">Configurar</button></div>
+            <div v-if="group?.recurring?.length" class="recurring-list">
+              <div v-for="rule in group.recurring" :key="rule.id" class="recurring-item"><span><strong>{{ rule.name }}</strong><small>{{ money(rule.amount) }} · {{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }} · Próximo: {{ dateLabel(rule.next_at) }}</small></span><button type="button" class="secondary small-action" @click="toggleRecurring(rule)">{{ rule.active ? 'Pausar' : 'Reactivar' }}</button></div>
+            </div>
+            <p v-else class="muted">Al crear un movimiento, puedes elegir si quieres repetirlo.</p>
+          </article>
+          <article class="group-card telegram-card">
+            <p class="eyebrow">AVISOS</p><h2>Notificaciones por Telegram</h2>
+            <p v-if="!telegramConfigured" class="muted">Telegram no está configurado en el servidor.</p>
+            <template v-else>
+              <p class="muted">{{ telegramConnected ? `Telegram conectado${telegramUsername ? ` como ${telegramUsername}` : ''}.` : 'Conecta tu cuenta para recibir los avisos que selecciones.' }}</p>
+              <button v-if="!telegramConnected && !telegramLinkUrl" type="button" class="secondary" @click="beginTelegramLink">Conectar Telegram</button>
+              <a v-if="telegramLinkUrl && !telegramConnected" class="telegram-link" :href="telegramLinkUrl" target="_blank" rel="noreferrer">Abrir Telegram para vincular</a>
+              <button v-if="!telegramConnected && telegramLinkUrl" type="button" class="ghost" @click="refreshTelegramStatus">Ya lo he vinculado · comprobar</button>
+              <button v-if="telegramConnected" type="button" class="ghost" @click="refreshTelegramStatus">Actualizar conexión</button>
+              <div class="telegram-options">
+                <label><input v-model="telegramNotificationTypes" type="checkbox" value="expense_created" /> Al crear un gasto o ingreso</label>
+                <label><input v-model="telegramNotificationTypes" type="checkbox" value="expense_updated" /> Al editar un movimiento</label>
+                <label><input v-model="telegramNotificationTypes" type="checkbox" value="expense_deleted" /> Al eliminar un movimiento</label>
+                <label><input v-model="telegramNotificationTypes" type="checkbox" value="settlement" /> Al registrar un pago entre miembros</label>
+              </div>
+              <button type="button" class="primary" :disabled="telegramSaving" @click="saveTelegramSettings">{{ telegramSaving ? 'Guardando…' : 'Guardar preferencias' }}</button>
+            </template>
+          </article>
           <article class="group-card"><p class="eyebrow">OTRO GRUPO</p><h2>Unirte con un código</h2><p class="muted">Al unirte saldrás de tu grupo actual si no eres su propietario.</p><form class="inline-form" @submit.prevent="joinGroup"><input v-model="joinCode" maxlength="8" placeholder="ABCD2345" required /><button class="secondary">Unirme</button></form><button v-if="group?.owner_uid !== user.uid" class="text-danger" @click="leaveGroup">Salir del grupo actual</button></article>
         </section>
       </template>
@@ -1043,19 +1464,37 @@ onMounted(async () => {
         <form v-else @submit.prevent="saveExpense">
           <fieldset v-if="!draft.id && !draft.transaction_type" class="transaction-type"><legend>Primero, selecciona el tipo</legend><div class="choice-grid transaction-options"><label :class="{ selected: draft.transaction_type === 'expense' }"><input v-model="draft.transaction_type" type="radio" value="expense" required /><PhArrowDown :size="22" /><span><strong>Gasto</strong><small>Dinero que ha salido</small></span></label><label :class="{ selected: draft.transaction_type === 'income' }"><input v-model="draft.transaction_type" type="radio" value="income" required /><PhArrowUp :size="22" /><span><strong>Ingreso</strong><small>Dinero que ha entrado</small></span></label><button type="button" class="quick-expense-choice" @click="startQuickExpense"><PhLightning :size="22" weight="fill" /><span><strong>Gasto rápido</strong><small>Guardar solo el importe</small></span></button></div></fieldset>
           <template v-if="draft.transaction_type">
-          <aside v-if="draft.is_quick" class="quick-edit-notice"><PhLightning :size="18" weight="fill" /><span><strong>Gasto rápido pendiente</strong><small>Completa el nombre, la ciudad y el resto de detalles antes de guardar.</small></span></aside>
+          <p class="form-hint">Solo son obligatorios el nombre y el importe; el resto puedes añadirlo después.</p>
+          <aside v-if="draft.is_quick" class="quick-edit-notice"><PhLightning :size="18" weight="fill" /><span><strong>Gasto rápido pendiente</strong><small>El importe ya está guardado. Añade un nombre más descriptivo y los datos que quieras.</small></span></aside>
           <div class="form-grid">
             <label class="full name-field"><span>Nombre del {{ draft.transaction_type === 'income' ? 'ingreso' : 'gasto' }}</span><input v-model="draft.name" maxlength="160" :placeholder="draft.transaction_type === 'income' ? 'Nómina, reembolso, venta…' : 'Cena, compra semanal, gasolina…'" autofocus required /><span class="frequent-label">Más usados</span><span class="frequent-names"><button v-for="suggestion in frequentNames" :key="suggestion.name" type="button" :class="{ active: normalizeName(draft.name) === normalizeName(suggestion.name) }" @click="selectFrequentName(suggestion)">{{ suggestion.name }}<small v-if="suggestion.count">{{ suggestion.count }}</small></button></span></label>
-            <label><span>Categoría</span><Multiselect v-model="draft.category" class="smart-select" :options="categoryOptions" searchable create-option allow-absent :can-clear="false" :aria="{ 'aria-label': 'Categoría' }" placeholder="Busca o crea una categoría" no-options-text="Escribe una categoría nueva" no-results-text="Pulsa Intro para crearla" /></label>
+            <label class="full"><span>Detalles (opcional)</span><textarea v-model="draft.details" maxlength="1000" rows="3" placeholder="Añade notas o información adicional…"></textarea></label>
+            <label class="full tag-field"><span>Etiquetas (opcional)</span><div class="tag-entry"><input v-model="tagInput" maxlength="40" placeholder="Escribe una etiqueta y pulsa Intro" @keydown.enter.prevent="addDraftTag()" /><button type="button" class="secondary" :disabled="!tagInput.trim() || draft.tags.length >= 10" @click="addDraftTag()">Añadir</button></div><div v-if="draft.tags.length" class="selected-tags"><button v-for="tag in draft.tags" :key="tag" type="button" @click="draft.tags = draft.tags.filter((item) => item !== tag)">{{ tag }} <PhX :size="13" /></button></div><div v-if="tagOptions.length" class="tag-suggestions"><span>Usadas recientemente</span><button v-for="tag in tagOptions.filter((item) => !draft.tags.includes(item)).slice(0, 8)" :key="tag" type="button" @click="addDraftTag(tag)">{{ tag }}</button></div></label>
+            <label><span>Categoría (opcional)</span><Multiselect v-model="draft.category" class="smart-select" :options="categoryOptions" searchable create-option allow-absent :can-clear="false" :aria="{ 'aria-label': 'Categoría' }" placeholder="Busca o crea una categoría" no-options-text="Escribe una categoría nueva" no-results-text="Pulsa Intro para crearla" /></label>
             <label><span>Importe</span><div class="money-input"><input v-model="draft.amount" type="number" inputmode="decimal" enterkeyhint="done" min="0.01" max="99999999" step="0.01" placeholder="0,00" required /><b>€</b></div></label>
-            <label><span>Establecimiento</span><Multiselect v-model="draft.place" class="smart-select" :options="establishmentOptions" searchable create-option allow-absent :can-clear="Boolean(draft.place)" :aria="{ 'aria-label': 'Establecimiento' }" placeholder="Busca o escribe un establecimiento" no-options-text="Escribe un establecimiento nuevo" no-results-text="Pulsa Intro para añadirlo" /><template v-if="frequentEstablishments.length"><span class="frequent-label">Más usados</span><span class="frequent-names"><button v-for="item in frequentEstablishments" :key="item.value" type="button" :class="{ active: normalizeName(draft.place || '') === normalizeName(item.value) }" @click="draft.place = item.value">{{ item.value }}<small v-if="item.count > 1">{{ item.count }}</small></button></span></template></label>
-            <label><span>Ciudad</span><Multiselect v-model="draft.city" class="smart-select" :options="cityOptions" searchable create-option allow-absent :can-clear="Boolean(draft.city)" :aria="{ 'aria-label': 'Ciudad' }" placeholder="Busca o escribe una ciudad" no-options-text="Escribe una ciudad nueva" no-results-text="Pulsa Intro para añadirla" /><template v-if="frequentCities.length"><span class="frequent-label">Más usadas</span><span class="frequent-names"><button v-for="item in frequentCities" :key="item.value" type="button" :class="{ active: normalizeName(draft.city || '') === normalizeName(item.value) }" @click="draft.city = item.value">{{ item.value }}<small v-if="item.count > 1">{{ item.count }}</small></button></span></template><span class="location-status"><small>{{ locationStatus }}</small><button type="button" :disabled="detectingCity" @click="detectCurrentCity"><PhCrosshair :size="14" /> {{ detectingCity ? 'Detectando…' : 'Usar mi ubicación' }}</button></span></label>
-            <label class="full"><span>Fecha y hora</span><input v-model="draft.occurred_at" type="datetime-local" required /></label>
+            <label><span>Establecimiento (opcional)</span><Multiselect v-model="draft.place" class="smart-select" :options="establishmentOptions" searchable create-option allow-absent :can-clear="Boolean(draft.place)" :aria="{ 'aria-label': 'Establecimiento' }" placeholder="Busca o escribe un establecimiento" no-options-text="Escribe un establecimiento nuevo" no-results-text="Pulsa Intro para añadirlo" /><template v-if="frequentEstablishments.length"><span class="frequent-label">Más usados</span><span class="frequent-names"><button v-for="item in frequentEstablishments" :key="item.value" type="button" :class="{ active: normalizeName(draft.place || '') === normalizeName(item.value) }" @click="draft.place = item.value">{{ item.value }}<small v-if="item.count > 1">{{ item.count }}</small></button></span></template></label>
+            <label><span>Ciudad (opcional)</span><Multiselect v-model="draft.city" class="smart-select" :options="cityOptions" searchable create-option allow-absent :can-clear="Boolean(draft.city)" :aria="{ 'aria-label': 'Ciudad' }" placeholder="Busca o escribe una ciudad" no-options-text="Escribe una ciudad nueva" no-results-text="Pulsa Intro para añadirla" /><template v-if="frequentCities.length"><span class="frequent-label">Más usadas</span><span class="frequent-names"><button v-for="item in frequentCities" :key="item.value" type="button" :class="{ active: normalizeName(draft.city || '') === normalizeName(item.value) }" @click="draft.city = item.value">{{ item.value }}<small v-if="item.count > 1">{{ item.count }}</small></button></span></template><span class="location-status"><small>{{ locationStatus }}</small><button type="button" :disabled="detectingCity" @click="detectCurrentCity"><PhCrosshair :size="14" /> {{ detectingCity ? 'Detectando…' : 'Usar mi ubicación' }}</button></span></label>
+            <label class="full"><span>Fecha y hora (opcional)</span><input v-model="draft.occurred_at" type="datetime-local" /></label>
+            <label v-if="!draft.id" class="full"><span>Repetir automáticamente</span><select v-model="draft.recurrence"><option value="none">No repetir</option><option value="weekly">Cada semana</option><option value="monthly">Cada mes</option><option value="yearly">Cada año</option></select></label>
           </div>
           <fieldset><legend>{{ draft.transaction_type === 'income' ? '¿Quién lo ha recibido?' : '¿Quién lo ha pagado?' }}</legend><div class="choice-grid"><label :class="{ selected: draft.paid_by_type === 'person' }"><input v-model="draft.paid_by_type" type="radio" value="person" /><PhWallet :size="22" /><span><strong>Una persona</strong><small>{{ draft.transaction_type === 'income' ? 'Selecciona quién recibió el dinero' : 'Selecciona quién adelantó el dinero' }}</small></span></label><label :class="{ selected: draft.paid_by_type === 'all' }"><input v-model="draft.paid_by_type" type="radio" value="all" /><PhUsers :size="22" /><span><strong>Entre todos</strong><small>Corresponde al grupo en conjunto</small></span></label></div><select v-if="draft.paid_by_type === 'person'" v-model="draft.paid_by_uid" class="member-select"><option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option></select></fieldset>
           <fieldset><legend>{{ draft.transaction_type === 'income' ? '¿A quién corresponde?' : '¿A quién se aplica?' }}</legend><div class="choice-grid"><label :class="{ selected: draft.applies_to_all }"><input v-model="draft.applies_to_all" type="radio" :value="true" /><PhUsers :size="22" /><span><strong>A todo el grupo</strong><small>Se reparte por igual</small></span></label><label :class="{ selected: !draft.applies_to_all }"><input v-model="draft.applies_to_all" type="radio" :value="false" /><PhCheck :size="22" /><span><strong>Solo a algunas</strong><small>Elige las personas</small></span></label></div><div v-if="!draft.applies_to_all" class="check-members"><label v-for="member in memberOptions" :key="member.uid"><input v-model="draft.participant_uids" type="checkbox" :value="member.uid" /><span class="avatar">{{ (member.name || member.email).slice(0, 1).toUpperCase() }}</span>{{ member.name || member.email }}</label></div></fieldset>
+          <fieldset class="split-fieldset"><legend>Cómo repartir {{ money(draft.amount) }}</legend><div class="choice-grid split-modes"><label :class="{ selected: draft.share_mode === 'equal' }"><input :checked="draft.share_mode === 'equal'" type="radio" @change="setShareMode('equal')" /><span><strong>Por igual</strong></span></label><label :class="{ selected: draft.share_mode === 'amount' }"><input :checked="draft.share_mode === 'amount'" type="radio" @change="setShareMode('amount')" /><span><strong>Por cantidad</strong></span></label><label :class="{ selected: draft.share_mode === 'percent' }"><input :checked="draft.share_mode === 'percent'" type="radio" @change="setShareMode('percent')" /><span><strong>Por porcentaje</strong></span></label></div><div v-if="draft.share_mode !== 'equal'" class="share-editor"><label v-for="member in splitMembers" :key="member.uid"><span>{{ member.name || member.email }}</span><div class="money-input"><input v-model="draft.participant_shares[member.uid]" type="number" min="0" max="99999999" step="0.01" :aria-label="`Parte de ${member.name || member.email}`" /><b>{{ draft.share_mode === 'percent' ? '%' : '€' }}</b></div></label><small>{{ draft.share_mode === 'percent' ? 'Los porcentajes deben sumar 100 %.' : 'Las cantidades deben sumar el importe total.' }}</small></div></fieldset>
           <footer><button v-if="draft.id" type="button" class="danger-button modal-delete" @click="deleteTarget = { id: draft.id, name: draft.name, transaction_type: draft.transaction_type }">Eliminar {{ draft.transaction_type === 'income' ? 'ingreso' : 'gasto' }}</button><button type="button" class="ghost" @click="closeExpenseModal">Cancelar</button><button class="primary" :disabled="saving"><PhCheck :size="18" weight="bold" /> {{ saving ? 'Guardando…' : `Guardar ${draft.transaction_type === 'income' ? 'ingreso' : 'gasto'}` }}</button></footer>
           </template>
+        </form>
+      </section>
+    </div>
+
+    <div v-if="settlementTarget" class="modal-backdrop" @mousedown.self="settlementTarget = null">
+      <section class="modal settlement-modal" role="dialog" aria-modal="true" aria-labelledby="settlement-title">
+        <header><div><p class="eyebrow">SALDAR DEUDA</p><h2 id="settlement-title">Registrar un pago</h2></div><button class="icon-button" aria-label="Cerrar" @click="settlementTarget = null"><PhX :size="22" /></button></header>
+        <p v-if="error" class="inline-error modal-error">{{ error }}</p>
+        <form @submit.prevent="saveSettlement">
+          <label><span>Quién paga</span><select v-model="settlementDraft.payer_uid"><option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option></select></label>
+          <label><span>Quién recibe</span><select v-model="settlementDraft.payee_uid"><option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option></select></label>
+          <label><span>Importe pagado (máximo {{ money(settlementTarget.amount) }})</span><div class="money-input"><input v-model="settlementDraft.amount" type="number" min="0.01" :max="settlementTarget.amount" step="0.01" required /><b>€</b></div></label>
+          <footer><button type="button" class="ghost" @click="settlementTarget = null">Cancelar</button><button class="primary" :disabled="saving"><PhCheck :size="18" /> Guardar pago</button></footer>
         </form>
       </section>
     </div>
@@ -1091,6 +1530,8 @@ onMounted(async () => {
       </section>
     </div>
 
+    <div v-if="recurringDeleteTarget" class="modal-backdrop" @mousedown.self="recurringDeleteTarget = null"><section class="confirm-dialog"><span class="danger-mark"><PhTrash :size="25" /></span><h2>¿Eliminar esta programación?</h2><p>“{{ recurringDeleteTarget.name }}” dejará de generar nuevos movimientos; los ya creados se conservarán.</p><div><button class="ghost" @click="recurringDeleteTarget = null">Cancelar</button><button class="danger-button" :disabled="saving" @click="removeRecurring">Sí, eliminar</button></div></section></div>
+    <div v-if="tagDeleteTarget" class="modal-backdrop" @mousedown.self="tagDeleteTarget = null"><section class="confirm-dialog"><span class="danger-mark"><PhTrash :size="25" /></span><h2>¿Eliminar esta etiqueta?</h2><p>“{{ tagDeleteTarget.name }}” se quitará de los movimientos asociados, pero no eliminará esos movimientos.</p><div><button class="ghost" @click="tagDeleteTarget = null">Cancelar</button><button class="danger-button" :disabled="saving" @click="removeTag">Sí, eliminar</button></div></section></div>
     <div v-if="deleteTarget" class="modal-backdrop" @mousedown.self="deleteTarget = null"><section class="confirm-dialog"><span class="danger-mark"><PhTrash :size="25" /></span><h2>¿Eliminar este movimiento?</h2><p>“{{ deleteTarget.name }}” desaparecerá del grupo y de las estadísticas.</p><div><button class="ghost" @click="deleteTarget = null">Cancelar</button><button class="danger-button" :disabled="saving" @click="removeExpense">Sí, eliminar</button></div></section></div>
   </div>
 </template>

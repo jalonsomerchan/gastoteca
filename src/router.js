@@ -8,6 +8,8 @@ export default createRouter({
     { path: '/', name: 'expenses', component: PageRoute },
     { path: '/balance', name: 'balance', component: PageRoute },
     { path: '/estadisticas', name: 'stats', component: PageRoute },
+    { path: '/recurrentes', name: 'recurring', component: PageRoute },
+    { path: '/etiquetas', name: 'tags', component: PageRoute },
     { path: '/establecimientos', name: 'establishments', component: PageRoute },
     { path: '/categorias', name: 'categories', component: PageRoute },
     { path: '/grupo', name: 'group', component: PageRoute },
