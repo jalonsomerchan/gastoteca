@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS mg_groups (
   name VARCHAR(120) NOT NULL DEFAULT 'Mis gastos',
   owner_uid VARCHAR(128) NOT NULL,
   invite_code VARCHAR(8) NOT NULL,
+  default_city VARCHAR(120) NOT NULL DEFAULT '',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -48,9 +49,11 @@ CREATE TABLE IF NOT EXISTS mg_group_invites (
 CREATE TABLE IF NOT EXISTS mg_expenses (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   group_id BIGINT UNSIGNED NOT NULL,
+  transaction_type ENUM('expense','income') NOT NULL DEFAULT 'expense',
   name VARCHAR(160) NOT NULL,
-  category VARCHAR(32) NOT NULL DEFAULT 'other',
+  category VARCHAR(80) NOT NULL DEFAULT 'other',
   place VARCHAR(160) NOT NULL DEFAULT '',
+  city VARCHAR(120) NOT NULL DEFAULT '',
   occurred_at DATETIME NOT NULL,
   amount DECIMAL(12,2) NOT NULL,
   paid_by_type ENUM('person','all') NOT NULL DEFAULT 'person',
@@ -62,9 +65,22 @@ CREATE TABLE IF NOT EXISTS mg_expenses (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_mg_expense_group_date (group_id, occurred_at),
+  KEY idx_mg_expense_type (group_id, transaction_type),
   KEY idx_mg_expense_category (group_id, category),
+  KEY idx_mg_expense_city (group_id, city),
   KEY idx_mg_expense_payer (group_id, paid_by_uid),
   CONSTRAINT fk_mg_expense_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mg_categories (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  group_id BIGINT UNSIGNED NOT NULL,
+  label VARCHAR(80) NOT NULL,
+  created_by VARCHAR(128) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mg_category_label (group_id, label),
+  CONSTRAINT fk_mg_category_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS mg_expense_participants (
