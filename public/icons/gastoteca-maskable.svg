@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="La Gastoteca">
+  <rect width="512" height="512" fill="#2f6b55"/>
+  <path fill="#fff" d="M177 130h158c11 0 20 9 20 20v206.8c0 15.3-16.7 24.8-30 17.2l-17.3-10-17.3 10a20 20 0 0 1-20 0l-17.3-10-17.3 10a20 20 0 0 1-20 0l-17.3-10-13.5 7.8c-13.3 7.6-30-1.9-30-17.2V150c0-11 9-20 20-20Z"/>
+  <circle cx="220" cy="206" r="28" fill="#d36b47"/>
+  <path fill="none" stroke="#2f6b55" stroke-linecap="round" stroke-width="10" d="M234 193c-4-4-9-6-15-6-12 0-22 9-24 21m0 11c2 12 12 21 24 21 6 0 11-2 15-6m-42-25h33m-33 12h30"/>
+  <path stroke="#2f6b55" stroke-linecap="round" stroke-width="15" d="M272 190h45M272 222h45M195 282h122M195 314h87"/>
+</svg>
