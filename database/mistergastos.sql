@@ -1,6 +1,11 @@
 CREATE DATABASE IF NOT EXISTS mistergastos CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE mistergastos;
 
+CREATE TABLE IF NOT EXISTS mg_schema_version (
+  id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+  version INT UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS mg_preferences (
   uid VARCHAR(128) NOT NULL,
   group_id BIGINT UNSIGNED NULL,
@@ -89,6 +94,7 @@ CREATE TABLE IF NOT EXISTS mg_expenses (
   group_id BIGINT UNSIGNED NOT NULL,
   transaction_type ENUM('expense','income') NOT NULL DEFAULT 'expense',
   name VARCHAR(160) NOT NULL,
+  is_quick TINYINT(1) NOT NULL DEFAULT 0,
   category_id BIGINT UNSIGNED NOT NULL,
   place_id BIGINT UNSIGNED NULL,
   city_id BIGINT UNSIGNED NOT NULL,
@@ -122,3 +128,6 @@ CREATE TABLE IF NOT EXISTS mg_expense_participants (
   KEY idx_mg_participant_uid (uid),
   CONSTRAINT fk_mg_participant_expense FOREIGN KEY (expense_id) REFERENCES mg_expenses(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO mg_schema_version (id, version) VALUES (1, 1)
+ON DUPLICATE KEY UPDATE version = VALUES(version);

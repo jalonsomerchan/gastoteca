@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   PhArrowRight,
@@ -15,6 +15,7 @@ import {
   PhGoogleLogo,
   PhHouse,
   PhList,
+  PhLightning,
   PhMagnifyingGlass,
   PhMapPin,
   PhPlus,
@@ -47,6 +48,9 @@ const expenses = ref([])
 const group = ref(null)
 const stats = ref({ total: 0, count: 0, average: 0, by_category: [], by_member: [], monthly: [] })
 const modalOpen = ref(false)
+const quickExpenseMode = ref(false)
+const quickAmount = ref('')
+const quickAmountInput = ref(null)
 const deleteTarget = ref(null)
 const filters = reactive({ search: '', category: '', from: '', to: '' })
 const filtersOpen = ref(false)
@@ -105,7 +109,7 @@ const categories = computed(() => [
 const emptyDraft = () => {
   const now = new Date()
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-  return { id: '', transaction_type: '', name: '', category: 'food', place: '', city: '', occurred_at: local, amount: '', paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [] }
+  return { id: '', transaction_type: '', name: '', category: 'food', place: '', city: '', occurred_at: local, amount: '', paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [], is_quick: false }
 }
 const draft = reactive(emptyDraft())
 
@@ -345,6 +349,10 @@ async function detectCurrentCity() {
   }
 }
 
+watch(() => draft.transaction_type, (transactionType) => {
+  if (transactionType && !draft.id && !quickExpenseMode.value) detectCurrentCity()
+})
+
 async function freshToken(force = false) {
   if (!user.value) throw new Error('Debes iniciar sesión.')
   token.value = await user.value.getIdToken(force)
@@ -397,6 +405,9 @@ async function login() {
 }
 
 function openExpense(expense = null) {
+  error.value = ''
+  quickExpenseMode.value = false
+  quickAmount.value = ''
   Object.assign(draft, emptyDraft(), expense ? {
     ...expense,
     transaction_type: expense.transaction_type || 'expense',
@@ -408,7 +419,54 @@ function openExpense(expense = null) {
   if (!expense) draft.city = group.value?.default_city || ''
   modalOpen.value = true
   locationStatus.value = ''
-  if (!expense) detectCurrentCity()
+}
+
+function closeExpenseModal() {
+  modalOpen.value = false
+  quickExpenseMode.value = false
+  quickAmount.value = ''
+}
+
+function startQuickExpense() {
+  quickExpenseMode.value = true
+  quickAmount.value = ''
+  nextTick(() => quickAmountInput.value?.focus())
+}
+
+async function saveQuickExpense() {
+  error.value = ''
+  const amount = Number(quickAmount.value)
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 99999999) {
+    error.value = 'Añade un importe mayor que cero.'
+    return
+  }
+
+  saving.value = true
+  try {
+    const quickDraft = {
+      ...emptyDraft(),
+      transaction_type: 'expense',
+      name: 'Gasto rápido',
+      category: 'other',
+      city: group.value?.default_city || 'Sin ciudad',
+      amount: amount.toFixed(2),
+      paid_by_type: 'person',
+      paid_by_uid: currentMember.value?.uid || memberOptions.value[0]?.uid || '',
+      applies_to_all: true,
+      participant_uids: [],
+      is_quick: true,
+    }
+    const data = await postJson('gastoteca/save_expense', await freshToken(true), quickDraft)
+    expenses.value = data.expenses
+    stats.value = data.stats
+    if (data.group) group.value = data.group
+    closeExpenseModal()
+    flash('Gasto rápido guardado. Puedes completarlo desde la lista.')
+  } catch (reason) {
+    error.value = reason.message
+  } finally {
+    saving.value = false
+  }
 }
 
 function selectFrequentName(suggestion) {
@@ -461,11 +519,11 @@ async function saveExpense() {
   }
   saving.value = true
   try {
-    const data = await postJson('gastoteca/save_expense', await freshToken(true), { ...draft })
+    const data = await postJson('gastoteca/save_expense', await freshToken(true), { ...draft, is_quick: false })
     expenses.value = data.expenses
     stats.value = data.stats
     if (data.group) group.value = data.group
-    modalOpen.value = false
+    closeExpenseModal()
     const movement = draft.transaction_type === 'income' ? 'Ingreso' : 'Gasto'
     flash(draft.id ? `${movement} actualizado.` : `${movement} añadido.`)
   } catch (reason) {
@@ -873,7 +931,7 @@ onMounted(async () => {
           <div class="expense-list-heading"><h1>Movimientos</h1><span>{{ filteredExpenses.length }}</span></div>
           <article v-for="expense in visibleExpenses" :key="expense.id" class="expense-card" role="button" tabindex="0" :aria-label="`Editar movimiento: ${expense.name}`" @click="openExpense(expense)" @keydown.enter.prevent="openExpense(expense)" @keydown.space.prevent="openExpense(expense)">
             <span class="category-icon" :style="expense.place && establishmentIcon(expense.place) ? { background: '#e5efe8', color: 'var(--green)' } : { background: `${category(expense.category).color}18`, color: category(expense.category).color }"><iconify-icon v-if="expense.place && establishmentIcon(expense.place)" :icon="establishmentIcon(expense.place)"></iconify-icon><iconify-icon v-else :icon="category(expense.category).icon"></iconify-icon></span>
-            <div class="expense-main"><strong>{{ expense.name }} <em v-if="expense.transaction_type === 'income'" class="movement-type">Ingreso</em></strong><span><PhMapPin :size="14" /> {{ expenseLocation(expense) }} · {{ dateLabel(expense.occurred_at) }}</span></div>
+            <div class="expense-main"><strong>{{ expense.name }} <em v-if="expense.transaction_type === 'income'" class="movement-type">Ingreso</em><em v-if="expense.is_quick" class="quick-pending-pill">Por completar</em></strong><span><PhMapPin :size="14" /> {{ expenseLocation(expense) }} · {{ dateLabel(expense.occurred_at) }}</span></div>
             <span class="category-pill" :style="{ color: category(expense.category).color }"><PhTag :size="13" /> {{ category(expense.category).label }}</span>
             <div class="expense-people"><span>{{ expense.transaction_type === 'income' ? 'Recibió' : 'Pagó' }}</span><strong>{{ expense.paid_by_type === 'all' ? 'Todo el grupo' : memberLabel(expense.paid_by_uid) }}</strong><small>Para {{ expense.applies_to_all ? 'todo el grupo' : expense.participant_uids.map(memberLabel).join(', ') }}</small></div>
             <strong class="expense-amount" :class="{ income: expense.transaction_type === 'income' }">{{ expense.transaction_type === 'income' ? '+' : '' }}{{ money(expense.amount) }}</strong>
@@ -974,12 +1032,18 @@ onMounted(async () => {
       </template>
     </main>
 
-    <div v-if="modalOpen" class="modal-backdrop" @mousedown.self="modalOpen = false">
+    <div v-if="modalOpen" class="modal-backdrop" @mousedown.self="closeExpenseModal">
       <section class="modal" role="dialog" aria-modal="true" aria-labelledby="expense-title">
-        <header><div><p class="eyebrow">{{ draft.id ? 'EDITAR MOVIMIENTO' : 'NUEVO MOVIMIENTO' }}</p><h2 id="expense-title">{{ draft.id ? 'Editar movimiento' : 'Añadir movimiento' }}</h2></div><button class="icon-button" @click="modalOpen = false"><PhX :size="22" /></button></header>
-        <form @submit.prevent="saveExpense">
-          <fieldset v-if="!draft.id && !draft.transaction_type" class="transaction-type"><legend>Primero, selecciona el tipo</legend><div class="choice-grid"><label :class="{ selected: draft.transaction_type === 'expense' }"><input v-model="draft.transaction_type" type="radio" value="expense" required /><PhArrowDown :size="22" /><span><strong>Gasto</strong><small>Dinero que ha salido</small></span></label><label :class="{ selected: draft.transaction_type === 'income' }"><input v-model="draft.transaction_type" type="radio" value="income" required /><PhArrowUp :size="22" /><span><strong>Ingreso</strong><small>Dinero que ha entrado</small></span></label></div></fieldset>
+        <header><div><p class="eyebrow">{{ quickExpenseMode ? 'GASTO RÁPIDO' : draft.id ? 'EDITAR MOVIMIENTO' : 'NUEVO MOVIMIENTO' }}</p><h2 id="expense-title">{{ quickExpenseMode ? 'Guardar importe' : draft.id ? 'Editar movimiento' : 'Añadir movimiento' }}</h2></div><button class="icon-button" aria-label="Cerrar" @click="closeExpenseModal"><PhX :size="22" /></button></header>
+        <p v-if="error" class="inline-error modal-error">{{ error }}</p>
+        <form v-if="quickExpenseMode" @submit.prevent="saveQuickExpense">
+          <div class="quick-entry"><label for="quick-amount"><span>¿Cuánto has gastado?</span><div class="money-input"><input id="quick-amount" ref="quickAmountInput" v-model="quickAmount" type="number" inputmode="decimal" enterkeyhint="done" min="0.01" max="99999999" step="0.01" placeholder="0,00" autofocus required /><b>€</b></div><small>El gasto quedará guardado para que completes los detalles más tarde.</small></label></div>
+          <footer><button type="button" class="ghost" @click="quickExpenseMode = false">Volver</button><button class="primary" :disabled="saving"><PhCheck :size="18" weight="bold" /> {{ saving ? 'Guardando…' : 'Guardar gasto' }}</button></footer>
+        </form>
+        <form v-else @submit.prevent="saveExpense">
+          <fieldset v-if="!draft.id && !draft.transaction_type" class="transaction-type"><legend>Primero, selecciona el tipo</legend><div class="choice-grid transaction-options"><label :class="{ selected: draft.transaction_type === 'expense' }"><input v-model="draft.transaction_type" type="radio" value="expense" required /><PhArrowDown :size="22" /><span><strong>Gasto</strong><small>Dinero que ha salido</small></span></label><label :class="{ selected: draft.transaction_type === 'income' }"><input v-model="draft.transaction_type" type="radio" value="income" required /><PhArrowUp :size="22" /><span><strong>Ingreso</strong><small>Dinero que ha entrado</small></span></label><button type="button" class="quick-expense-choice" @click="startQuickExpense"><PhLightning :size="22" weight="fill" /><span><strong>Gasto rápido</strong><small>Guardar solo el importe</small></span></button></div></fieldset>
           <template v-if="draft.transaction_type">
+          <aside v-if="draft.is_quick" class="quick-edit-notice"><PhLightning :size="18" weight="fill" /><span><strong>Gasto rápido pendiente</strong><small>Completa el nombre, la ciudad y el resto de detalles antes de guardar.</small></span></aside>
           <div class="form-grid">
             <label class="full name-field"><span>Nombre del {{ draft.transaction_type === 'income' ? 'ingreso' : 'gasto' }}</span><input v-model="draft.name" maxlength="160" :placeholder="draft.transaction_type === 'income' ? 'Nómina, reembolso, venta…' : 'Cena, compra semanal, gasolina…'" autofocus required /><span class="frequent-label">Más usados</span><span class="frequent-names"><button v-for="suggestion in frequentNames" :key="suggestion.name" type="button" :class="{ active: normalizeName(draft.name) === normalizeName(suggestion.name) }" @click="selectFrequentName(suggestion)">{{ suggestion.name }}<small v-if="suggestion.count">{{ suggestion.count }}</small></button></span></label>
             <label><span>Categoría</span><Multiselect v-model="draft.category" class="smart-select" :options="categoryOptions" searchable create-option allow-absent :can-clear="false" :aria="{ 'aria-label': 'Categoría' }" placeholder="Busca o crea una categoría" no-options-text="Escribe una categoría nueva" no-results-text="Pulsa Intro para crearla" /></label>
@@ -990,7 +1054,7 @@ onMounted(async () => {
           </div>
           <fieldset><legend>{{ draft.transaction_type === 'income' ? '¿Quién lo ha recibido?' : '¿Quién lo ha pagado?' }}</legend><div class="choice-grid"><label :class="{ selected: draft.paid_by_type === 'person' }"><input v-model="draft.paid_by_type" type="radio" value="person" /><PhWallet :size="22" /><span><strong>Una persona</strong><small>{{ draft.transaction_type === 'income' ? 'Selecciona quién recibió el dinero' : 'Selecciona quién adelantó el dinero' }}</small></span></label><label :class="{ selected: draft.paid_by_type === 'all' }"><input v-model="draft.paid_by_type" type="radio" value="all" /><PhUsers :size="22" /><span><strong>Entre todos</strong><small>Corresponde al grupo en conjunto</small></span></label></div><select v-if="draft.paid_by_type === 'person'" v-model="draft.paid_by_uid" class="member-select"><option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option></select></fieldset>
           <fieldset><legend>{{ draft.transaction_type === 'income' ? '¿A quién corresponde?' : '¿A quién se aplica?' }}</legend><div class="choice-grid"><label :class="{ selected: draft.applies_to_all }"><input v-model="draft.applies_to_all" type="radio" :value="true" /><PhUsers :size="22" /><span><strong>A todo el grupo</strong><small>Se reparte por igual</small></span></label><label :class="{ selected: !draft.applies_to_all }"><input v-model="draft.applies_to_all" type="radio" :value="false" /><PhCheck :size="22" /><span><strong>Solo a algunas</strong><small>Elige las personas</small></span></label></div><div v-if="!draft.applies_to_all" class="check-members"><label v-for="member in memberOptions" :key="member.uid"><input v-model="draft.participant_uids" type="checkbox" :value="member.uid" /><span class="avatar">{{ (member.name || member.email).slice(0, 1).toUpperCase() }}</span>{{ member.name || member.email }}</label></div></fieldset>
-          <footer><button v-if="draft.id" type="button" class="danger-button modal-delete" @click="deleteTarget = { id: draft.id, name: draft.name, transaction_type: draft.transaction_type }">Eliminar {{ draft.transaction_type === 'income' ? 'ingreso' : 'gasto' }}</button><button type="button" class="ghost" @click="modalOpen = false">Cancelar</button><button class="primary" :disabled="saving"><PhCheck :size="18" weight="bold" /> {{ saving ? 'Guardando…' : `Guardar ${draft.transaction_type === 'income' ? 'ingreso' : 'gasto'}` }}</button></footer>
+          <footer><button v-if="draft.id" type="button" class="danger-button modal-delete" @click="deleteTarget = { id: draft.id, name: draft.name, transaction_type: draft.transaction_type }">Eliminar {{ draft.transaction_type === 'income' ? 'ingreso' : 'gasto' }}</button><button type="button" class="ghost" @click="closeExpenseModal">Cancelar</button><button class="primary" :disabled="saving"><PhCheck :size="18" weight="bold" /> {{ saving ? 'Guardando…' : `Guardar ${draft.transaction_type === 'income' ? 'ingreso' : 'gasto'}` }}</button></footer>
           </template>
         </form>
       </section>
