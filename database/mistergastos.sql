@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS mg_groups (
   owner_uid VARCHAR(128) NOT NULL,
   invite_code VARCHAR(8) NOT NULL,
   default_city VARCHAR(120) NOT NULL DEFAULT '',
+  default_payment_method VARCHAR(40) NOT NULL DEFAULT 'card',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -101,6 +102,7 @@ CREATE TABLE IF NOT EXISTS mg_expenses (
   city_id BIGINT UNSIGNED NOT NULL,
   occurred_at DATETIME NOT NULL,
   amount DECIMAL(12,2) NOT NULL,
+  payment_method VARCHAR(40) NOT NULL DEFAULT 'unspecified',
   paid_by_type ENUM('person','all') NOT NULL DEFAULT 'person',
   paid_by_uid VARCHAR(128) NULL,
   applies_to_all TINYINT(1) NOT NULL DEFAULT 1,
@@ -157,6 +159,7 @@ CREATE TABLE IF NOT EXISTS mg_settlements (
   payer_uid VARCHAR(128) NOT NULL,
   payee_uid VARCHAR(128) NOT NULL,
   amount DECIMAL(12,2) NOT NULL,
+  payment_method VARCHAR(40) NOT NULL DEFAULT 'unspecified',
   paid_at DATETIME NOT NULL,
   created_by VARCHAR(128) NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -201,5 +204,5 @@ CREATE TABLE IF NOT EXISTS mg_telegram_preferences (
   CONSTRAINT fk_mg_telegram_preferences_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO mg_schema_version (id, version) VALUES (1, 2)
+INSERT INTO mg_schema_version (id, version) VALUES (1, 3)
 ON DUPLICATE KEY UPDATE version = VALUES(version);

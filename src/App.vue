@@ -57,7 +57,7 @@ const deleteTarget = ref(null)
 const settlementTarget = ref(null)
 const recurringDeleteTarget = ref(null)
 const tagDeleteTarget = ref(null)
-const settlementDraft = reactive({ payer_uid: '', payee_uid: '', amount: '' })
+const settlementDraft = reactive({ payer_uid: '', payee_uid: '', amount: '', payment_method: 'card' })
 const budgetDraft = reactive({ category: 'food', monthly_limit: '' })
 const tagDraft = reactive({ id: '', name: '' })
 const telegramNotificationTypes = ref([])
@@ -74,6 +74,7 @@ const inviteEmail = ref('')
 const inviteSending = ref(false)
 const joinCode = ref('')
 const defaultCityDraft = ref('')
+const defaultPaymentMethodDraft = ref('card')
 const detectingCity = ref(false)
 const locationStatus = ref('')
 const detectedCity = ref('')
@@ -109,6 +110,15 @@ const builtInCategories = [
   { id: 'other', label: 'Otros', icon: 'mdi:shape-outline', color: '#757a78' },
 ]
 
+const paymentMethods = [
+  { value: 'card', label: 'Tarjeta' },
+  { value: 'cash', label: 'Efectivo' },
+  { value: 'transfer', label: 'Transferencia bancaria' },
+  { value: 'bizum', label: 'Bizum' },
+  { value: 'other', label: 'Otro' },
+]
+const paymentMethodLabel = (value) => paymentMethods.find((method) => method.value === value)?.label || 'Sin especificar'
+
 const customCategoryColor = (label) => {
   const palette = ['#5f7296', '#987052', '#6f7e4c', '#8b6387', '#477e78', '#9b625a']
   const hash = [...label].reduce((total, character) => total + character.charCodeAt(0), 0)
@@ -123,14 +133,19 @@ const categories = computed(() => [
 const emptyDraft = () => {
   const now = new Date()
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-  return { id: '', transaction_type: '', name: '', details: '', category: 'food', place: '', city: '', occurred_at: local, amount: '', paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [], participant_shares: {}, share_mode: 'equal', tags: [], recurrence: 'none', is_quick: false }
+  return { id: '', transaction_type: '', name: '', details: '', category: 'food', place: '', city: '', occurred_at: local, amount: '', payment_method: group.value?.default_payment_method || 'card', paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [], participant_shares: {}, share_mode: 'equal', tags: [], recurrence: 'none', is_quick: false }
 }
 const draft = reactive(emptyDraft())
 
 const memberOptions = computed(() => group.value?.members || [])
 const currentMember = computed(() => memberOptions.value.find((member) => member.uid === user.value?.uid))
-const recurringDraft = reactive({ id: '', transaction_type: 'expense', name: '', amount: '', category: 'bills', frequency: 'monthly', next_at: emptyDraft().occurred_at, paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [], participant_shares: {}, share_mode: 'equal', tags: [] })
+const recurringDraft = reactive({ id: '', transaction_type: 'expense', name: '', amount: '', category: 'bills', frequency: 'monthly', next_at: emptyDraft().occurred_at, payment_method: group.value?.default_payment_method || 'card', paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [], participant_shares: {}, share_mode: 'equal', tags: [] })
 const maxCategoryTotal = computed(() => Math.max(1, ...stats.value.by_category.map((item) => Number(item.total))))
+const budgetSummary = computed(() => (group.value?.budgets || []).reduce((summary, budget) => {
+  summary.limit += Number(budget.monthly_limit) || 0
+  summary.spent += Number(budget.current_total) || 0
+  return summary
+}, { limit: 0, spent: 0 }))
 const categoryOptions = computed(() => categories.value.map((item) => ({ value: item.id, label: item.label })))
 const tagOptions = computed(() => (group.value?.tags || []).map((item) => item.name))
 const splitMembers = computed(() => draft.applies_to_all ? memberOptions.value : memberOptions.value.filter((member) => draft.participant_uids.includes(member.uid)))
@@ -297,6 +312,7 @@ const balanceBreakdown = computed(() => {
 const navigationItems = [
   { route: 'expenses', label: 'Gastos', path: '/', icon: PhReceipt },
   { route: 'stats', label: 'Estadísticas', path: '/estadisticas', icon: PhChartDonut },
+  { route: 'budgets', label: 'Presupuestos', path: '/presupuestos', icon: PhWallet },
   { route: 'recurring', label: 'Recurrentes', path: '/recurrentes', icon: PhLightning },
   { route: 'tags', label: 'Etiquetas', path: '/etiquetas', icon: PhTag },
   { route: 'establishments', label: 'Establecimientos', path: '/establecimientos', icon: PhMapPin },
@@ -581,6 +597,7 @@ function openSettlement(entry, isOwedToYou) {
   settlementDraft.payer_uid = isOwedToYou ? entry.counterpartyUid : user.value?.uid || ''
   settlementDraft.payee_uid = isOwedToYou ? user.value?.uid || '' : entry.counterpartyUid
   settlementDraft.amount = Number(entry.amount).toFixed(2)
+  settlementDraft.payment_method = group.value?.default_payment_method || 'card'
 }
 
 async function saveSettlement() {
@@ -640,6 +657,7 @@ function startRecurringRule(rule = null) {
     category: payload.category || 'bills',
     frequency: rule?.frequency || 'monthly',
     next_at: (rule?.next_at || emptyDraft().occurred_at).replace(' ', 'T').slice(0, 16),
+    payment_method: payload.payment_method || group.value?.default_payment_method || 'card',
     paid_by_type: payload.paid_by_type || 'person',
     paid_by_uid: memberOptions.value.some((member) => member.uid === payload.paid_by_uid) ? payload.paid_by_uid : (currentMember.value?.uid || memberOptions.value[0]?.uid || ''),
     applies_to_all: payload.applies_to_all ?? true,
@@ -854,9 +872,9 @@ async function saveGroupSettings() {
   saving.value = true
   error.value = ''
   try {
-    const data = await postJson('gastoteca/update_group_settings', await freshToken(true), { default_city: defaultCityDraft.value })
+    const data = await postJson('gastoteca/update_group_settings', await freshToken(true), { default_city: defaultCityDraft.value, default_payment_method: defaultPaymentMethodDraft.value })
     group.value = data.group
-    flash('Ciudad predeterminada actualizada.')
+    flash('Preferencias del grupo actualizadas.')
   } catch (reason) {
     error.value = reason.message
   } finally {
@@ -1052,6 +1070,10 @@ watch(() => group.value, () => {
   if (!recurringDraft.id && !recurringDraft.paid_by_uid) recurringDraft.paid_by_uid = currentMember.value?.uid || memberOptions.value[0]?.uid || ''
 })
 watch(() => group.value?.default_city, (city) => { defaultCityDraft.value = city || '' }, { immediate: true })
+watch(() => group.value?.default_payment_method, (method) => {
+  defaultPaymentMethodDraft.value = method || 'card'
+  if (!recurringDraft.id) recurringDraft.payment_method = method || 'card'
+}, { immediate: true })
 watch(() => splitMembers.value.map((member) => member.uid).join('|'), () => {
   if (draft.share_mode === 'equal' || !splitMembers.value.length) return
   const members = splitMembers.value
@@ -1239,7 +1261,7 @@ onMounted(async () => {
           <div class="expense-list-heading"><h1>Movimientos</h1><span>{{ filteredExpenses.length }}</span></div>
           <article v-for="expense in visibleExpenses" :key="expense.id" class="expense-card" role="button" tabindex="0" :aria-label="`Editar movimiento: ${expense.name}`" @click="openExpense(expense)" @keydown.enter.prevent="openExpense(expense)" @keydown.space.prevent="openExpense(expense)">
             <span class="category-icon" :style="expense.place && establishmentIcon(expense.place) ? { background: '#e5efe8', color: 'var(--green)' } : { background: `${category(expense.category).color}18`, color: category(expense.category).color }"><iconify-icon v-if="expense.place && establishmentIcon(expense.place)" :icon="establishmentIcon(expense.place)"></iconify-icon><iconify-icon v-else :icon="category(expense.category).icon"></iconify-icon></span>
-            <div class="expense-main"><strong>{{ expense.name }} <em v-if="expense.transaction_type === 'income'" class="movement-type">Ingreso</em><em v-if="expense.is_quick" class="quick-pending-pill">Por completar</em></strong><span><PhMapPin :size="14" /> {{ expenseLocation(expense) }} · {{ dateLabel(expense.occurred_at) }}</span><small v-if="expense.details" class="expense-details">{{ expense.details }}</small><span v-if="expense.tags?.length" class="expense-tag-list"><em v-for="tag in expense.tags" :key="tag">{{ tag }}</em></span></div>
+            <div class="expense-main"><strong>{{ expense.name }} <em v-if="expense.transaction_type === 'income'" class="movement-type">Ingreso</em><em v-if="expense.is_quick" class="quick-pending-pill">Por completar</em></strong><span><PhMapPin :size="14" /> {{ expenseLocation(expense) }} · {{ dateLabel(expense.occurred_at) }}</span><small class="expense-payment-method">{{ paymentMethodLabel(expense.payment_method) }}</small><small v-if="expense.details" class="expense-details">{{ expense.details }}</small><span v-if="expense.tags?.length" class="expense-tag-list"><em v-for="tag in expense.tags" :key="tag">{{ tag }}</em></span></div>
             <span class="category-pill" :style="{ color: category(expense.category).color }"><PhTag :size="13" /> {{ category(expense.category).label }}</span>
             <div class="expense-people"><span>{{ expense.transaction_type === 'income' ? 'Recibió' : 'Pagó' }}</span><strong>{{ expense.paid_by_type === 'all' ? 'Todo el grupo' : memberLabel(expense.paid_by_uid) }}</strong><small>Para {{ expense.applies_to_all ? 'todo el grupo' : expense.participant_uids.map(memberLabel).join(', ') }}</small></div>
             <strong class="expense-amount" :class="{ income: expense.transaction_type === 'income' }">{{ expense.transaction_type === 'income' ? '+' : '' }}{{ money(expense.amount) }}</strong>
@@ -1286,7 +1308,7 @@ onMounted(async () => {
         </section>
         <section v-if="settlements.length" class="chart-card settlement-history">
           <div class="card-title"><div><p class="eyebrow">HISTORIAL</p><h2>Pagos registrados</h2></div></div>
-          <div class="settlement-history-list"><p v-for="item in settlements.slice(0, 8)" :key="item.id"><span><strong>{{ memberLabel(item.payer_uid) }}</strong> pagó a <strong>{{ memberLabel(item.payee_uid) }}</strong></span><small>{{ dateLabel(item.paid_at) }}</small><b>{{ money(item.amount) }}</b></p></div>
+          <div class="settlement-history-list"><p v-for="item in settlements.slice(0, 8)" :key="item.id"><span><strong>{{ memberLabel(item.payer_uid) }}</strong> pagó a <strong>{{ memberLabel(item.payee_uid) }}</strong></span><small>{{ dateLabel(item.paid_at) }} · {{ paymentMethodLabel(item.payment_method) }}</small><b>{{ money(item.amount) }}</b></p></div>
         </section>
       </template>
 
@@ -1308,20 +1330,36 @@ onMounted(async () => {
             <div class="member-stat"><div v-for="item in stats.by_member" :key="item.uid || 'all'"><span class="avatar">{{ item.uid ? memberLabel(item.uid).slice(0, 1).toUpperCase() : '∑' }}</span><p><strong>{{ item.uid ? memberLabel(item.uid) : 'Todo el grupo' }}</strong><small>{{ item.count }} gastos</small></p><b>{{ money(item.total) }}</b></div><p v-if="!stats.by_member.length" class="muted">Aún no hay datos.</p></div>
           </article>
         </section>
-        <section class="chart-card budget-section">
-          <div class="card-title"><div><p class="eyebrow">CONTROL DEL MES</p><h2>Presupuestos por categoría</h2></div></div>
-          <form class="budget-form" @submit.prevent="saveBudget">
-            <label><span>Categoría</span><select v-model="budgetDraft.category"><option v-for="item in categories" :key="item.id" :value="item.id">{{ item.label }}</option></select></label>
-            <label><span>Límite mensual</span><div class="money-input"><input v-model="budgetDraft.monthly_limit" type="number" min="0.01" step="0.01" placeholder="0,00" required /><b>€</b></div></label>
-            <button class="primary" :disabled="saving"><PhPlus :size="17" /> Guardar presupuesto</button>
+      </template>
+
+      <template v-else-if="route.name === 'budgets'">
+        <section class="page-heading">
+          <div><p class="eyebrow">PLANIFICA EL MES</p><h1>Presupuestos</h1><p>Define cuánto queréis gastar en cada categoría y sigue el avance del mes.</p></div>
+        </section>
+        <section class="budget-overview" aria-label="Resumen de presupuestos">
+          <article class="budget-overview-card"><span>Categorías con límite</span><strong>{{ group?.budgets?.length || 0 }}</strong></article>
+          <article class="budget-overview-card"><span>Gastado este mes</span><strong>{{ money(budgetSummary.spent) }}</strong></article>
+          <article class="budget-overview-card"><span>Límite mensual total</span><strong>{{ money(budgetSummary.limit) }}</strong></article>
+        </section>
+        <section class="feature-layout budget-page-layout">
+          <form class="feature-panel feature-form budget-editor" @submit.prevent="saveBudget">
+            <div class="feature-panel-heading"><div><p class="eyebrow">{{ group?.budgets?.some((item) => item.category === budgetDraft.category) ? 'AJUSTA EL LÍMITE' : 'NUEVO PRESUPUESTO' }}</p><h2>Presupuesto por categoría</h2></div></div>
+            <label><span>Categoría</span><select v-model="budgetDraft.category" @change="budgetDraft.monthly_limit = ''"><option v-for="item in categories" :key="item.id" :value="item.id">{{ item.label }}</option></select></label>
+            <label><span>Límite mensual</span><div class="money-input"><input v-model="budgetDraft.monthly_limit" type="number" min="0.01" max="99999999" step="0.01" placeholder="0,00" required /><b>€</b></div></label>
+            <p class="feature-hint">Si la categoría ya tiene un presupuesto, guardar actualizará su límite.</p>
+            <div class="feature-form-actions"><button v-if="group?.budgets?.some((item) => item.category === budgetDraft.category)" type="button" class="ghost" @click="budgetDraft.monthly_limit = ''">Limpiar</button><span v-else></span><button class="primary" :disabled="saving"><PhPlus :size="17" /> {{ saving ? 'Guardando…' : 'Guardar presupuesto' }}</button></div>
           </form>
-          <div v-if="group?.budgets?.length" class="budget-list">
-            <article v-for="budget in group.budgets" :key="budget.category" class="budget-item">
-              <div><strong>{{ budget.label }}</strong><span>{{ money(budget.current_total) }} de {{ money(budget.monthly_limit) }}</span><button type="button" class="text-danger budget-delete" @click="deleteBudget(budget.category)">Eliminar</button></div>
-              <div class="budget-track"><span :class="{ exceeded: Number(budget.current_total) > Number(budget.monthly_limit) }" :style="{ width: `${Math.min(100, Number(budget.current_total) / Number(budget.monthly_limit) * 100)}%` }"></span></div>
-            </article>
-          </div>
-          <p v-else class="muted">Aún no hay presupuestos para este grupo.</p>
+          <section class="feature-panel feature-list-panel budget-list-panel">
+            <div class="feature-panel-heading"><div><p class="eyebrow">SEGUIMIENTO MENSUAL</p><h2>Uso por categoría</h2></div><span class="feature-count">{{ group?.budgets?.length || 0 }}</span></div>
+            <div v-if="group?.budgets?.length" class="budget-list">
+              <article v-for="budget in group.budgets" :key="budget.category" class="budget-item">
+                <div class="budget-item-heading"><span class="budget-category-icon" :style="{ color: category(budget.category).color, background: `${category(budget.category).color}18` }"><iconify-icon :icon="category(budget.category).icon"></iconify-icon></span><div class="budget-category-copy"><strong>{{ budget.label }}</strong><small>{{ money(budget.current_total) }} gastados de {{ money(budget.monthly_limit) }}</small></div><strong class="budget-percent" :class="{ exceeded: Number(budget.current_total) > Number(budget.monthly_limit) }">{{ Math.round(Number(budget.current_total) / Math.max(0.01, Number(budget.monthly_limit)) * 100) }}%</strong></div>
+                <div class="budget-track"><span :class="{ exceeded: Number(budget.current_total) > Number(budget.monthly_limit) }" :style="{ width: `${Math.min(100, Number(budget.current_total) / Math.max(0.01, Number(budget.monthly_limit)) * 100)}%` }"></span></div>
+                <div class="budget-item-footer"><small>{{ Number(budget.current_total) > Number(budget.monthly_limit) ? `Te has pasado ${money(Number(budget.current_total) - Number(budget.monthly_limit))}` : `Quedan ${money(Number(budget.monthly_limit) - Number(budget.current_total))}` }}</small><div class="feature-row-actions"><button type="button" class="ghost small-action" @click="Object.assign(budgetDraft, { category: budget.category, monthly_limit: Number(budget.monthly_limit).toFixed(2) })">Editar</button><button type="button" class="danger-button small-action" @click="deleteBudget(budget.category)">Eliminar</button></div></div>
+              </article>
+            </div>
+            <div v-else class="feature-empty"><PhWallet :size="27" /><strong>Aún no hay presupuestos</strong><p>Crea el primero para controlar los gastos mensuales de una categoría.</p></div>
+          </section>
         </section>
       </template>
 
@@ -1361,6 +1399,7 @@ onMounted(async () => {
               <label class="feature-field-wide"><span>Nombre</span><input v-model="recurringDraft.name" maxlength="160" :placeholder="recurringDraft.transaction_type === 'income' ? 'Nómina o ingreso recurrente' : 'Alquiler, suscripción…'" required /></label>
               <label><span>Importe</span><div class="money-input"><input v-model="recurringDraft.amount" type="number" min="0.01" max="99999999" step="0.01" placeholder="0,00" required /><b>€</b></div></label>
               <label><span>Categoría</span><select v-model="recurringDraft.category"><option v-for="item in categories" :key="item.id" :value="item.id">{{ item.label }}</option></select></label>
+              <label class="feature-field-wide"><span>Método de pago</span><select v-model="recurringDraft.payment_method"><option v-if="recurringDraft.payment_method === 'unspecified'" value="unspecified">Sin especificar</option><option v-for="method in paymentMethods" :key="method.value" :value="method.value">{{ method.label }}</option></select></label>
               <label class="feature-field-wide"><span>Próxima fecha de aplicación</span><input v-model="recurringDraft.next_at" type="datetime-local" required /></label>
             </div>
             <fieldset class="feature-fieldset">
@@ -1385,7 +1424,7 @@ onMounted(async () => {
             <div class="feature-panel-heading"><div><p class="eyebrow">PROGRAMACIONES</p><h2>Movimientos automáticos</h2></div><span class="feature-count">{{ group?.recurring?.length || 0 }}</span></div>
             <div v-if="group?.recurring?.length" class="feature-list">
               <article v-for="rule in group.recurring" :key="rule.id" class="feature-list-row">
-                <div class="feature-list-main"><span class="feature-status-dot" :class="{ paused: !rule.active }"></span><div><strong>{{ rule.name }}</strong><small>{{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ money(rule.amount) }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }}</small><small>{{ rule.active ? 'Próximo: ' : 'Pausado · Próximo: ' }}{{ dateLabel(rule.next_at) }}</small></div></div>
+                <div class="feature-list-main"><span class="feature-status-dot" :class="{ paused: !rule.active }"></span><div><strong>{{ rule.name }}</strong><small>{{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ money(rule.amount) }} · {{ paymentMethodLabel(rule.payload?.payment_method) }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }}</small><small>{{ rule.active ? 'Próximo: ' : 'Pausado · Próximo: ' }}{{ dateLabel(rule.next_at) }}</small></div></div>
                 <div class="feature-row-actions"><button type="button" class="ghost small-action" @click="startRecurringRule(rule)">Editar</button><button type="button" class="secondary small-action" @click="toggleRecurring(rule)">{{ rule.active ? 'Pausar' : 'Reactivar' }}</button></div>
               </article>
             </div>
@@ -1423,6 +1462,7 @@ onMounted(async () => {
           <article class="group-card"><p class="eyebrow">MIEMBROS</p><h2>Personas del grupo</h2><div class="members"><div v-for="member in memberOptions" :key="member.uid"><span class="avatar">{{ (member.name || member.email).slice(0, 1).toUpperCase() }}</span><p><strong>{{ member.name || member.email }}</strong><small>{{ member.uid === group?.owner_uid ? 'Propietario' : member.email }}</small></p><span v-if="member.uid === user.uid" class="you-pill">Tú</span></div></div></article>
           <article v-if="group?.owner_uid === user.uid" class="group-card"><p class="eyebrow">INVITAR</p><h2>Sumar una persona</h2><p class="muted">Enviaremos un correo. Al iniciar sesión con Google usando ese email, se unirá automáticamente.</p><form class="inline-form" @submit.prevent="invite"><input v-model="inviteEmail" type="email" placeholder="persona@ejemplo.com" required /><button class="primary" :disabled="inviteSending">{{ inviteSending ? 'Enviando…' : 'Invitar' }} <PhArrowRight :size="17" /></button></form><div v-if="group.pending_emails?.length" class="pending"><span v-for="email in group.pending_emails" :key="email">{{ email }} · pendiente</span></div></article>
           <article v-if="group?.owner_uid === user.uid" class="group-card"><p class="eyebrow">UBICACIÓN</p><h2>Ciudad predeterminada</h2><p class="muted">Se usará cuando no podamos detectar la ubicación del dispositivo.</p><form class="group-setting-form" @submit.prevent="saveGroupSettings"><Multiselect v-model="defaultCityDraft" class="smart-select" :options="cityOptions" searchable create-option allow-absent :can-clear="Boolean(defaultCityDraft)" :aria="{ 'aria-label': 'Ciudad predeterminada' }" placeholder="Escribe o busca una ciudad" no-options-text="Escribe una ciudad nueva" no-results-text="Sin coincidencias" /><button class="primary" :disabled="saving">Guardar</button></form></article>
+          <article v-if="group?.owner_uid === user.uid" class="group-card"><p class="eyebrow">PAGOS</p><h2>Método predeterminado</h2><p class="muted">Se preseleccionará al añadir gastos y registrar pagos para este grupo.</p><form class="group-setting-form payment-method-setting" @submit.prevent="saveGroupSettings"><select v-model="defaultPaymentMethodDraft" aria-label="Método de pago predeterminado"><option v-for="method in paymentMethods" :key="method.value" :value="method.value">{{ method.label }}</option></select><button class="primary" :disabled="saving">Guardar</button></form></article>
           <article class="group-card recurring-card">
             <div class="feature-panel-heading"><div><p class="eyebrow">AUTOMATIZACIONES</p><h2>Movimientos recurrentes</h2></div><button type="button" class="ghost small-action" @click="router.push({ name: 'recurring' })">Configurar</button></div>
             <div v-if="group?.recurring?.length" class="recurring-list">
@@ -1472,6 +1512,7 @@ onMounted(async () => {
             <label class="full tag-field"><span>Etiquetas (opcional)</span><div class="tag-entry"><input v-model="tagInput" maxlength="40" placeholder="Escribe una etiqueta y pulsa Intro" @keydown.enter.prevent="addDraftTag()" /><button type="button" class="secondary" :disabled="!tagInput.trim() || draft.tags.length >= 10" @click="addDraftTag()">Añadir</button></div><div v-if="draft.tags.length" class="selected-tags"><button v-for="tag in draft.tags" :key="tag" type="button" @click="draft.tags = draft.tags.filter((item) => item !== tag)">{{ tag }} <PhX :size="13" /></button></div><div v-if="tagOptions.length" class="tag-suggestions"><span>Usadas recientemente</span><button v-for="tag in tagOptions.filter((item) => !draft.tags.includes(item)).slice(0, 8)" :key="tag" type="button" @click="addDraftTag(tag)">{{ tag }}</button></div></label>
             <label><span>Categoría (opcional)</span><Multiselect v-model="draft.category" class="smart-select" :options="categoryOptions" searchable create-option allow-absent :can-clear="false" :aria="{ 'aria-label': 'Categoría' }" placeholder="Busca o crea una categoría" no-options-text="Escribe una categoría nueva" no-results-text="Pulsa Intro para crearla" /></label>
             <label><span>Importe</span><div class="money-input"><input v-model="draft.amount" type="number" inputmode="decimal" enterkeyhint="done" min="0.01" max="99999999" step="0.01" placeholder="0,00" required /><b>€</b></div></label>
+            <label><span>Método de pago</span><select v-model="draft.payment_method"><option v-if="draft.payment_method === 'unspecified'" value="unspecified">Sin especificar</option><option v-for="method in paymentMethods" :key="method.value" :value="method.value">{{ method.label }}</option></select></label>
             <label><span>Establecimiento (opcional)</span><Multiselect v-model="draft.place" class="smart-select" :options="establishmentOptions" searchable create-option allow-absent :can-clear="Boolean(draft.place)" :aria="{ 'aria-label': 'Establecimiento' }" placeholder="Busca o escribe un establecimiento" no-options-text="Escribe un establecimiento nuevo" no-results-text="Pulsa Intro para añadirlo" /><template v-if="frequentEstablishments.length"><span class="frequent-label">Más usados</span><span class="frequent-names"><button v-for="item in frequentEstablishments" :key="item.value" type="button" :class="{ active: normalizeName(draft.place || '') === normalizeName(item.value) }" @click="draft.place = item.value">{{ item.value }}<small v-if="item.count > 1">{{ item.count }}</small></button></span></template></label>
             <label><span>Ciudad (opcional)</span><Multiselect v-model="draft.city" class="smart-select" :options="cityOptions" searchable create-option allow-absent :can-clear="Boolean(draft.city)" :aria="{ 'aria-label': 'Ciudad' }" placeholder="Busca o escribe una ciudad" no-options-text="Escribe una ciudad nueva" no-results-text="Pulsa Intro para añadirla" /><template v-if="frequentCities.length"><span class="frequent-label">Más usadas</span><span class="frequent-names"><button v-for="item in frequentCities" :key="item.value" type="button" :class="{ active: normalizeName(draft.city || '') === normalizeName(item.value) }" @click="draft.city = item.value">{{ item.value }}<small v-if="item.count > 1">{{ item.count }}</small></button></span></template><span class="location-status"><small>{{ locationStatus }}</small><button type="button" :disabled="detectingCity" @click="detectCurrentCity"><PhCrosshair :size="14" /> {{ detectingCity ? 'Detectando…' : 'Usar mi ubicación' }}</button></span></label>
             <label class="full"><span>Fecha y hora (opcional)</span><input v-model="draft.occurred_at" type="datetime-local" /></label>
@@ -1494,6 +1535,7 @@ onMounted(async () => {
           <label><span>Quién paga</span><select v-model="settlementDraft.payer_uid"><option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option></select></label>
           <label><span>Quién recibe</span><select v-model="settlementDraft.payee_uid"><option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option></select></label>
           <label><span>Importe pagado (máximo {{ money(settlementTarget.amount) }})</span><div class="money-input"><input v-model="settlementDraft.amount" type="number" min="0.01" :max="settlementTarget.amount" step="0.01" required /><b>€</b></div></label>
+          <label><span>Método de pago</span><select v-model="settlementDraft.payment_method"><option v-for="method in paymentMethods" :key="method.value" :value="method.value">{{ method.label }}</option></select></label>
           <footer><button type="button" class="ghost" @click="settlementTarget = null">Cancelar</button><button class="primary" :disabled="saving"><PhCheck :size="18" /> Guardar pago</button></footer>
         </form>
       </section>
