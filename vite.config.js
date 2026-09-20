@@ -4,6 +4,6 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
-  plugins: [vue()],
+  plugins: [vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === 'iconify-icon' } } })],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
 })

@@ -46,14 +46,52 @@ CREATE TABLE IF NOT EXISTS mg_group_invites (
   CONSTRAINT fk_mg_invite_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS mg_categories (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  group_id BIGINT UNSIGNED NOT NULL,
+  category_key VARCHAR(80) NOT NULL,
+  label VARCHAR(80) NOT NULL,
+  icon VARCHAR(120) NOT NULL DEFAULT 'mdi:tag-outline',
+  created_by VARCHAR(128) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mg_category_key (group_id, category_key),
+  UNIQUE KEY uq_mg_category_group_id (group_id, id),
+  CONSTRAINT fk_mg_category_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mg_places (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  group_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(160) NOT NULL,
+  icon VARCHAR(120) NOT NULL DEFAULT 'mdi:store-outline',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mg_place_name (group_id, name),
+  UNIQUE KEY uq_mg_place_group_id (group_id, id),
+  CONSTRAINT fk_mg_place_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mg_cities (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  group_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mg_city_name (group_id, name),
+  UNIQUE KEY uq_mg_city_group_id (group_id, id),
+  CONSTRAINT fk_mg_city_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS mg_expenses (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   group_id BIGINT UNSIGNED NOT NULL,
   transaction_type ENUM('expense','income') NOT NULL DEFAULT 'expense',
   name VARCHAR(160) NOT NULL,
-  category VARCHAR(80) NOT NULL DEFAULT 'other',
-  place VARCHAR(160) NOT NULL DEFAULT '',
-  city VARCHAR(120) NOT NULL DEFAULT '',
+  category_id BIGINT UNSIGNED NOT NULL,
+  place_id BIGINT UNSIGNED NULL,
+  city_id BIGINT UNSIGNED NOT NULL,
   occurred_at DATETIME NOT NULL,
   amount DECIMAL(12,2) NOT NULL,
   paid_by_type ENUM('person','all') NOT NULL DEFAULT 'person',
@@ -65,22 +103,15 @@ CREATE TABLE IF NOT EXISTS mg_expenses (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_mg_expense_group_date (group_id, occurred_at),
+  KEY idx_mg_expense_category_id (group_id, category_id),
+  KEY idx_mg_expense_place_id (group_id, place_id),
+  KEY idx_mg_expense_city_id (group_id, city_id),
   KEY idx_mg_expense_type (group_id, transaction_type),
-  KEY idx_mg_expense_category (group_id, category),
-  KEY idx_mg_expense_city (group_id, city),
   KEY idx_mg_expense_payer (group_id, paid_by_uid),
-  CONSTRAINT fk_mg_expense_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS mg_categories (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  group_id BIGINT UNSIGNED NOT NULL,
-  label VARCHAR(80) NOT NULL,
-  created_by VARCHAR(128) NOT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_mg_category_label (group_id, label),
-  CONSTRAINT fk_mg_category_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+  CONSTRAINT fk_mg_expense_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE,
+  CONSTRAINT fk_mg_expense_category_ref FOREIGN KEY (group_id, category_id) REFERENCES mg_categories(group_id, id) ON DELETE CASCADE,
+  CONSTRAINT fk_mg_expense_place_ref FOREIGN KEY (group_id, place_id) REFERENCES mg_places(group_id, id) ON DELETE CASCADE,
+  CONSTRAINT fk_mg_expense_city_ref FOREIGN KEY (group_id, city_id) REFERENCES mg_cities(group_id, id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS mg_expense_participants (
