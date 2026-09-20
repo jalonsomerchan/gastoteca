@@ -434,4 +434,35 @@ iconify-icon { display:inline-block; width:1em; height:1em; vertical-align:-.12e
 .settings-account-row strong { font-size:.77rem; }
 .settings-account-row small { margin-top:.2rem; color:var(--muted); font-size:.65rem; }
 .settings-group-icon { display:grid; flex:0 0 36px; place-items:center; width:36px; height:36px; color:var(--green); background:var(--soft); border-radius:12px; }
+.expense-history-toolbar { display:flex; align-items:center; justify-content:space-between; gap:.8rem; margin:0 1.6rem 1rem; padding:.8rem .9rem; background:#fff; border:1px solid var(--line); border-radius:14px; }
+.expense-history-toolbar>span { color:var(--muted); font-size:.68rem; line-height:1.45; }
+.expense-history-toolbar button { flex:0 0 auto; min-height:36px; padding:.5rem .75rem; font-size:.68rem; }
+.expense-history-panel { margin:0 1.6rem 1.5rem; padding:1rem 1.1rem; background:#fff; border:1px solid var(--line); border-radius:17px; }
+.expense-history-heading { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding-bottom:.7rem; border-bottom:1px solid #edf0ed; }
+.expense-history-heading .eyebrow { margin-bottom:.18rem; font-size:.56rem; }
+.expense-history-heading h2 { margin:0; font-family:Fraunces,serif; font-size:1.2rem; letter-spacing:-.025em; }
+.expense-history-heading .icon-button { flex:0 0 auto; }
+.expense-history-empty { display:grid; justify-items:center; gap:.6rem; padding:1.6rem .7rem .8rem; color:var(--muted); text-align:center; }
+.expense-history-empty>svg { color:#9aac9f; }
+.expense-history-empty p { max-width:390px; margin:0; font-size:.7rem; line-height:1.55; }
+.expense-history-empty .loader { width:25px; height:25px; }
+.expense-history-list { position:relative; display:grid; gap:0; margin:0; padding:0 0 0 1.15rem; list-style:none; }
+.expense-history-list::before { position:absolute; top:1.15rem; bottom:1rem; left:.26rem; width:1px; background:var(--line); content:''; }
+.expense-history-entry { position:relative; min-width:0; padding:1rem 0 1rem .2rem; border-bottom:1px solid #edf0ed; }
+.expense-history-entry:last-child { border-bottom:0; }
+.expense-history-entry::before { position:absolute; top:1.2rem; left:-1.13rem; width:9px; height:9px; background:var(--green); border:2px solid #fff; border-radius:50%; box-shadow:0 0 0 1px #b9cfc1; content:''; }
+.expense-history-entry-heading { display:flex; align-items:center; justify-content:space-between; gap:.6rem; }
+.expense-history-event { padding:.24rem .48rem; color:var(--green-dark); background:var(--soft); border-radius:99px; font-size:.58rem; font-weight:800; }
+.expense-history-event.deleted { color:#a23d34; background:#fff0ee; }
+.expense-history-entry-heading time { color:var(--muted); font-size:.62rem; }
+.expense-history-actor { margin:.45rem 0 .55rem; font-size:.7rem; font-weight:800; }
+.expense-history-actor span { color:var(--muted); font-weight:500; }
+.expense-history-changes { display:grid; gap:.32rem; margin:0; }
+.expense-history-changes>div { display:grid; grid-template-columns:minmax(95px,.35fr) minmax(0,1fr); align-items:start; gap:.55rem; padding:.38rem .5rem; background:#f7f8f5; border-radius:9px; }
+.expense-history-changes dt { color:var(--muted); font-size:.62rem; }
+.expense-history-changes dd { display:flex; align-items:baseline; flex-wrap:wrap; gap:.32rem; min-width:0; margin:0; font-size:.64rem; overflow-wrap:anywhere; }
+.expense-history-changes dd svg { flex:0 0 auto; align-self:center; color:#9aa49e; }
+.expense-history-changes dd strong { color:var(--ink); font-size:inherit; }
+.history-old-value { color:#838c86; text-decoration:line-through; }
 @media (max-width:900px) { .settings-layout { grid-template-columns:1fr; }.settings-account-panel { grid-column:auto; } }
+@media (max-width:580px) { .expense-history-toolbar { align-items:flex-start; flex-direction:column; margin:0 1rem 1rem; }.expense-history-toolbar button { width:100%; }.expense-history-panel { margin:0 1rem 1rem; padding:.85rem; }.expense-history-changes>div { grid-template-columns:80px minmax(0,1fr); gap:.35rem; }.expense-history-entry-heading time { text-align:right; } }

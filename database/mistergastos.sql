@@ -230,5 +230,19 @@ CREATE TABLE IF NOT EXISTS mg_notification_preferences (
   CONSTRAINT fk_mg_notification_preferences_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO mg_schema_version (id, version) VALUES (1, 5)
+CREATE TABLE IF NOT EXISTS mg_expense_history (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  group_id BIGINT UNSIGNED NOT NULL,
+  expense_id BIGINT UNSIGNED NOT NULL,
+  actor_uid VARCHAR(128) NOT NULL,
+  actor_name VARCHAR(190) NOT NULL,
+  event_type ENUM('created','updated','deleted') NOT NULL,
+  changes LONGTEXT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_mg_expense_history_group (group_id, expense_id, id),
+  CONSTRAINT fk_mg_expense_history_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO mg_schema_version (id, version) VALUES (1, 6)
 ON DUPLICATE KEY UPDATE version = VALUES(version);

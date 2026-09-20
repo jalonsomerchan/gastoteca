@@ -7,6 +7,7 @@ import {
   PhChartDonut,
   PhCaretDown,
   PhCheck,
+  PhClockCounterClockwise,
   PhCoins,
   PhCrosshair,
   PhArrowDown,
@@ -64,6 +65,9 @@ const deleteTarget = ref(null)
 const settlementTarget = ref(null)
 const recurringDeleteTarget = ref(null)
 const tagDeleteTarget = ref(null)
+const expenseHistoryForId = ref(0)
+const expenseHistoryEntries = ref([])
+const expenseHistoryLoading = ref(false)
 const settlementDraft = reactive({ payer_uid: '', payee_uid: '', amount: '', payment_method: 'card' })
 const budgetDraft = reactive({ category: 'food', monthly_limit: '' })
 const tagDraft = reactive({ id: '', name: '' })
@@ -107,6 +111,7 @@ const iconPickerCollectionCache = new Map()
 let expenseObserver = null
 let routeDataRequestId = 0
 let notificationsPollTimer = null
+let expenseHistoryRequestId = 0
 
 const builtInCategories = [
   { id: 'food', label: 'Alimentación', icon: 'mdi:food-apple-outline', color: '#d36b47' },
@@ -524,6 +529,8 @@ async function login() {
 
 function openExpense(expense = null) {
   error.value = ''
+  expenseHistoryForId.value = 0
+  expenseHistoryEntries.value = []
   quickExpenseMode.value = false
   quickAmount.value = ''
   tagInput.value = ''
@@ -548,6 +555,63 @@ function closeExpenseModal() {
   modalOpen.value = false
   quickExpenseMode.value = false
   quickAmount.value = ''
+  expenseHistoryForId.value = 0
+  expenseHistoryEntries.value = []
+}
+
+async function loadExpenseHistory(expenseId) {
+  const requestId = ++expenseHistoryRequestId
+  expenseHistoryForId.value = Number(expenseId)
+  expenseHistoryEntries.value = []
+  expenseHistoryLoading.value = true
+  try {
+    const data = await postJson('gastoteca/expense_history', await freshToken(true), { id: expenseId })
+    if (requestId === expenseHistoryRequestId) expenseHistoryEntries.value = data.history || []
+  } catch (reason) {
+    error.value = reason.message
+    expenseHistoryForId.value = 0
+  } finally {
+    if (requestId === expenseHistoryRequestId) expenseHistoryLoading.value = false
+  }
+}
+
+const historyFieldLabels = {
+  transaction_type: 'Tipo',
+  name: 'Nombre',
+  details: 'Detalles',
+  category: 'Categoría',
+  place: 'Establecimiento',
+  city: 'Ciudad',
+  occurred_at: 'Fecha del movimiento',
+  amount: 'Importe',
+  payment_method: 'Método de pago',
+  paid_by_type: 'Quién pagó/recibió',
+  paid_by_uid: 'Pagador o receptor',
+  applies_to_all: 'Se aplica a todo el grupo',
+  participant_uids: 'Participantes',
+  participants: 'Reparto',
+  tags: 'Etiquetas',
+  is_quick: 'Gasto rápido',
+}
+
+function historyChangeEntries(entry) {
+  return Object.entries(entry.changes || {}).map(([field, values]) => ({ field, label: historyFieldLabels[field] || field, ...values }))
+}
+
+function historyValue(field, value) {
+  if (value === null || value === undefined || value === '') return '—'
+  if (field === 'amount') return money(value)
+  if (field === 'transaction_type') return value === 'income' ? 'Ingreso' : 'Gasto'
+  if (field === 'category') return category(value).label
+  if (field === 'occurred_at') return dateLabel(value)
+  if (field === 'payment_method') return paymentMethodLabel(value)
+  if (field === 'paid_by_type') return value === 'all' ? 'Todo el grupo' : 'Una persona'
+  if (field === 'paid_by_uid') return memberLabel(value)
+  if (field === 'applies_to_all' || field === 'is_quick') return value ? 'Sí' : 'No'
+  if (field === 'participant_uids') return value.length ? value.map(memberLabel).join(', ') : 'Nadie'
+  if (field === 'participants') return value.length ? value.map((item) => `${memberLabel(item.uid)}: ${money(item.share_amount)}`).join(' · ') : 'Sin reparto'
+  if (field === 'tags') return value.length ? value.join(', ') : 'Sin etiquetas'
+  return Array.isArray(value) ? value.join(', ') : String(value)
 }
 
 function startQuickExpense() {
@@ -927,7 +991,7 @@ async function removeExpense() {
     stats.value = data.stats
     settlements.value = data.settlements || settlements.value
     deleteTarget.value = null
-    modalOpen.value = false
+    closeExpenseModal()
     flash(`${movement} eliminado.`)
   } catch (reason) {
     error.value = reason.message
@@ -1653,6 +1717,10 @@ onMounted(async () => {
       <section class="modal" role="dialog" aria-modal="true" aria-labelledby="expense-title">
         <header><p id="expense-title" class="eyebrow modal-title">{{ quickExpenseMode ? 'Gasto rápido' : draft.id ? 'Editar movimiento' : draft.transaction_type ? (draft.transaction_type === 'income' ? 'Nuevo ingreso' : 'Nuevo gasto') : 'Nuevo movimiento' }}</p><button class="icon-button" aria-label="Cerrar" @click="closeExpenseModal"><PhX :size="22" /></button></header>
         <p v-if="error" class="inline-error modal-error">{{ error }}</p>
+        <div v-if="draft.id && !quickExpenseMode" class="expense-history-toolbar">
+          <span>Consulta quién modificó este movimiento y qué cambió.</span>
+          <button type="button" class="secondary" :disabled="expenseHistoryLoading" @click="loadExpenseHistory(draft.id)"><PhClockCounterClockwise :size="17" /> {{ expenseHistoryLoading ? 'Cargando…' : expenseHistoryForId === Number(draft.id) ? 'Actualizar historial' : 'Ver historial' }}</button>
+        </div>
         <form v-if="quickExpenseMode" @submit.prevent="saveQuickExpense">
           <div class="quick-entry"><label for="quick-amount"><span>¿Cuánto has gastado? *</span><div class="money-input"><input id="quick-amount" ref="quickAmountInput" v-model="quickAmount" type="number" inputmode="decimal" enterkeyhint="done" min="0.01" max="99999999" step="0.01" placeholder="0,00" autofocus required /><b>€</b></div><small>El gasto quedará guardado para que completes los detalles más tarde.</small></label></div>
           <footer><button type="button" class="ghost" @click="quickExpenseMode = false">Volver</button><button class="primary" :disabled="saving"><PhCheck :size="18" weight="bold" /> {{ saving ? 'Guardando…' : 'Guardar gasto' }}</button></footer>
@@ -1680,6 +1748,20 @@ onMounted(async () => {
           <footer><button v-if="draft.id" type="button" class="danger-button modal-delete" @click="deleteTarget = { id: draft.id, name: draft.name, transaction_type: draft.transaction_type }">Eliminar {{ draft.transaction_type === 'income' ? 'ingreso' : 'gasto' }}</button><button type="button" class="ghost" @click="closeExpenseModal">Cancelar</button><button class="primary" :disabled="saving"><PhCheck :size="18" weight="bold" /> {{ saving ? 'Guardando…' : `Guardar ${draft.transaction_type === 'income' ? 'ingreso' : 'gasto'}` }}</button></footer>
           </template>
         </form>
+        <section v-if="expenseHistoryForId === Number(draft.id) && draft.id" class="expense-history-panel" aria-live="polite" aria-label="Historial de cambios">
+          <header class="expense-history-heading"><div><p class="eyebrow">AUDITORÍA</p><h2>Historial de cambios</h2></div><button type="button" class="icon-button" aria-label="Cerrar historial" @click="expenseHistoryForId = 0"><PhX :size="19" /></button></header>
+          <div v-if="expenseHistoryLoading" class="expense-history-empty"><span class="loader"></span><p>Cargando cambios…</p></div>
+          <div v-else-if="!expenseHistoryEntries.length" class="expense-history-empty"><PhClockCounterClockwise :size="24" /><p>Aún no hay cambios registrados para este movimiento. Guardaremos los cambios que se hagan a partir de ahora.</p></div>
+          <ol v-else class="expense-history-list">
+            <li v-for="entry in expenseHistoryEntries" :key="entry.id" class="expense-history-entry">
+              <div class="expense-history-entry-heading"><span class="expense-history-event" :class="entry.event_type">{{ entry.event_type === 'created' ? 'Creado' : entry.event_type === 'deleted' ? 'Eliminado' : 'Actualizado' }}</span><time>{{ dateLabel(entry.created_at) }}</time></div>
+              <p class="expense-history-actor">{{ entry.actor_name || 'Miembro' }} <span v-if="entry.event_type === 'created'">creó el movimiento</span><span v-else-if="entry.event_type === 'deleted'">eliminó el movimiento</span><span v-else>hizo cambios</span></p>
+              <dl v-if="historyChangeEntries(entry).length" class="expense-history-changes">
+                <div v-for="change in historyChangeEntries(entry)" :key="change.field"><dt>{{ change.label }}</dt><dd><span v-if="change.from !== null && change.from !== undefined" class="history-old-value">{{ historyValue(change.field, change.from) }}</span><PhArrowRight v-if="change.from !== null && change.from !== undefined && change.to !== null && change.to !== undefined" :size="13" /><strong v-if="change.to !== null && change.to !== undefined">{{ historyValue(change.field, change.to) }}</strong><span v-if="change.from === null && change.to === null" class="muted">Sin valor</span></dd></div>
+              </dl>
+            </li>
+          </ol>
+        </section>
       </section>
     </div>
 
