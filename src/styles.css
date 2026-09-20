@@ -407,6 +407,12 @@ iconify-icon { display:inline-block; width:1em; height:1em; vertical-align:-.12e
   .quick-entry .money-input input { font-size:2rem !important; }
 }
 
+.modal>header { align-items:center; }
+.modal-title { margin:0; color:var(--ink); font-family:Fraunces,serif; font-size:clamp(1.5rem,4vw,2rem); font-weight:700; letter-spacing:-.04em; line-height:1.1; }
+.confirm-dialog .modal-title { margin-bottom:.65rem; color:var(--ink); }
+.inline-form-field { display:grid; flex:1; gap:.35rem; color:#59645f; font-size:.68rem; font-weight:700; }
+.inline-form-field>span { margin:0; color:inherit; font-size:inherit; font-weight:inherit; }
+
 .settings-layout { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:1rem; }
 .settings-panel { min-height:100%; }
 .settings-intro { margin:.2rem 0 1rem; }
