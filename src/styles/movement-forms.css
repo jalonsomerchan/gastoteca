@@ -42,8 +42,10 @@
 .split-modes>label { min-height:48px; padding:.55rem; }
 .split-modes>label span { min-width:0; }
 .share-editor { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; margin-top:.75rem; padding:.8rem; background:#f1f5f2; border-radius:14px; }
+.share-editor label { display:block; min-width:0; }
 .share-editor label>span { display:block; margin-bottom:.35rem; color:#59645f; font-size:.67rem; font-weight:700; }
-.share-editor .money-input input { height:42px; padding-right:2rem; }
+.share-editor .money-input input { width:100%; min-width:0; height:42px; padding:0 2rem 0 .85rem; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:12px; outline:none; }
+.share-editor .money-input input:focus { border-color:var(--green-focus); box-shadow:0 0 0 3px #2f6b5514; }
 .share-editor .money-input b { top:.68rem; }
 .share-editor>small { grid-column:1/-1; color:var(--muted); font-size:.64rem; }
 .budget-section { margin-top:1rem; }
@@ -82,4 +84,3 @@
 .telegram-options label { display:flex; align-items:center; gap:.55rem; color:#59645f; font-size:.72rem; }
 .telegram-options input { accent-color:var(--green); }
 .telegram-link { display:inline-flex; margin:.25rem .5rem .25rem 0; color:var(--green); font-size:.75rem; font-weight:800; }
-

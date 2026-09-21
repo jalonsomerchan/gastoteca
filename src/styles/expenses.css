@@ -2,7 +2,7 @@
 .modal fieldset.transaction-type { margin-top:0; margin-bottom:1.3rem; }
 .transaction-type .choice-grid>label { min-height:66px; }
 .transaction-type .choice-grid>label:first-child.selected { color:var(--terracotta); border-color:#d99579; box-shadow:0 0 0 3px #d36b4712; }
-.form-grid .frequent-names { display:flex; flex-wrap:wrap; gap:.38rem; margin:0; }
+.form-grid .frequent-names { display:flex; flex-wrap:wrap; gap:.38rem; margin:.5rem 0 0; }
 .payment-method-field { display:grid; gap:.35rem; margin-top:.65rem; color:#59645f; font-size:.7rem; font-weight:700; }
 .payment-method-field .member-select { margin-top:0; }
 .frequent-names button { display:inline-flex; align-items:center; gap:.35rem; min-height:30px; padding:.34rem .62rem; color:#53615a; background:#fff; border:1px solid var(--line); border-radius:999px; font-size:.69rem; font-weight:700; }
@@ -30,7 +30,7 @@
 .form-grid .smart-select .multiselect-tags-search,
 .form-grid .smart-select .multiselect-search:focus,
 .form-grid .smart-select .multiselect-tags-search:focus { height:100%; padding:0 0 0 var(--ms-px,.875rem); color:inherit; background:var(--ms-bg,#fff); border:0; border-radius:var(--ms-radius,4px); box-shadow:none; }
-.form-grid label:focus-within { position:relative; z-index:26; }
+.form-grid label:has(.smart-select.is-active) { position:relative; z-index:26; }
 .smart-select { --ms-dropdown-radius:12px; }
 .smart-select .multiselect-dropdown { overflow-y:auto; border-radius:12px; }
 .smart-select .multiselect-option { min-height:40px; padding:.55rem .85rem; font-size:.8rem; }
@@ -52,4 +52,3 @@
   .modal footer { flex-wrap:wrap; }
   .confirm-dialog { max-width:100vw; overflow-wrap:anywhere; }
 }
-

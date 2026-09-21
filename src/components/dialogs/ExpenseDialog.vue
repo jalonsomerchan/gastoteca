@@ -105,7 +105,6 @@ watch(() => draft.transaction_type, type => {
         </footer>
       </form>
       <form :aria-busy="saving" v-else @submit.prevent="saveExpense">
-        <p class="required-hint">Los campos con * son obligatorios.</p>
         <fieldset v-if="!draft.id && !draft.transaction_type" class="transaction-type">
           <legend>Primero, selecciona el tipo *</legend><div class="choice-grid transaction-options">
             <label :class="{ selected: draft.transaction_type === 'expense' }">
@@ -126,7 +125,6 @@ watch(() => draft.transaction_type, type => {
           </div>
         </fieldset>
         <template v-if="draft.transaction_type">
-          <button v-if="!draft.id" type="button" class="ghost" :disabled="saving" @click="draft.transaction_type = ''; focusElement('#expense-title')">Cambiar tipo de movimiento</button>
           <aside v-if="draft.is_quick" class="quick-edit-notice">
             <PhLightning aria-hidden="true" :size="18" weight="fill" /><span><strong>Gasto rápido pendiente</strong><small>El importe ya está guardado. Añade un nombre más descriptivo y los datos que quieras.</small></span>
           </aside>
@@ -135,7 +133,7 @@ watch(() => draft.transaction_type, type => {
               <span>Nombre del {{ draft.transaction_type === 'income' ? 'ingreso' : 'gasto' }} *</span><input id="expense-name" v-model="draft.name" :aria-label="draft.transaction_type === 'income' ? 'Nombre del ingreso' : 'Nombre del gasto'"
                                                                                                               maxlength="160"
                                                                                                               :placeholder="draft.transaction_type === 'income' ? 'Nómina, reembolso, venta…' : 'Cena, compra semanal, gasolina…'"
-                                                                                                              autofocus
+                                                                                                              :autofocus="!draft.id"
                                                                                                               required
               /><span class="frequent-names"><button v-for="suggestion in frequentNames"
                                                      :key="suggestion.name"

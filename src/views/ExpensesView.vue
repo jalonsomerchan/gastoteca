@@ -6,7 +6,6 @@ import { PhArrowRight, PhFunnel, PhCaretDown, PhReceipt, PhPlus } from '@phospho
 const {
   router,
   expenses,
-  group,
   filters,
   filtersOpen,
   loadMoreSentinel,
@@ -30,9 +29,6 @@ const {
 
 <template>
   <section class="balance-section" aria-label="Tu balance">
-    <p class="eyebrow">
-      {{ group?.name || 'MI GRUPO' }}
-    </p>
     <div class="balance-grid single-balance">
       <button type="button"
               class="balance-card balance-summary-card"
@@ -87,7 +83,6 @@ const {
   <div class="expense-list-heading">
     <h1>Movimientos</h1><span aria-hidden="true">{{ filteredExpenses.length }}</span>
   </div>
-  <p class="result-summary" role="status" aria-live="polite" aria-atomic="true">{{ filteredExpenses.length }} {{ filteredExpenses.length === 1 ? 'movimiento encontrado' : 'movimientos encontrados' }} · Mostrando {{ visibleExpenses.length }}</p>
   <section v-if="filteredExpenses.length" class="expense-list" aria-label="Lista de movimientos">
     <ExpenseCard
       v-for="expense in visibleExpenses"
