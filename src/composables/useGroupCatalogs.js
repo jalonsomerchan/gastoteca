@@ -4,8 +4,11 @@ import { normalizeName } from '../utils/formatters.js'
 
 export function useGroupCatalogs({ group, user, stats, draft, recurringDraft, detectedCity, expenses }) {
   const categories = computed(() => [
-      ...builtInCategories.map((item) => ({ ...item, icon: group.value?.category_icons?.[item.id] || item.icon })),
-      ...(group.value?.custom_categories || []).map((label) => ({ id: label, label, icon: group.value?.category_icons?.[label] || 'mdi:tag-outline', color: customCategoryColor(label) })),
+      ...builtInCategories.map((item) => ({ ...item, label: group.value?.category_labels?.[item.id] || item.label, icon: group.value?.category_icons?.[item.id] || item.icon })),
+      ...(group.value?.custom_categories || []).map((label) => {
+        const id = group.value?.category_keys?.[label] || label
+        return { id, label, icon: group.value?.category_icons?.[id] || 'mdi:tag-outline', color: customCategoryColor(label) }
+      }),
     ])
 
   const memberOptions = computed(() => group.value?.members || [])

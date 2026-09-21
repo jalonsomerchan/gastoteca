@@ -80,6 +80,38 @@ export function useGroup({
     }
   }
 
+  async function saveCatalogItem(type, id, name, icon) {
+    if (saving.value) return false
+    error.value = ''
+    const cleanName = name.trim()
+    if (!cleanName) {
+      error.value = `Escribe un nombre para ${type === 'establishment' ? 'el establecimiento' : 'la categoría'}.`
+      return false
+    }
+    if (!/^[a-z0-9][a-z0-9-]*:[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(icon)) {
+      error.value = 'Usa un icono válido de Iconify.'
+      return false
+    }
+    saving.value = true
+    try {
+      const data = await postJson('gastoteca/save_catalog_item', await freshToken(true), {
+        type,
+        id,
+        name: cleanName,
+        icon,
+      })
+      group.value = data.group
+      prepareCatalogDraft()
+      flash(`${type === 'establishment' ? 'Establecimiento' : 'Categoría'} ${id ? 'actualizado' : 'creado'}.`)
+      return true
+    } catch (reason) {
+      error.value = reason.message
+      return false
+    } finally {
+      saving.value = false
+    }
+  }
+
   async function joinGroup() {
     if (saving.value) return
     saving.value = true
@@ -113,5 +145,5 @@ export function useGroup({
     finally { saving.value = false }
   }
 
-  return { invite, saveGroupSettings, prepareCatalogDraft, saveCatalogIcons, joinGroup, leaveGroup }
+  return { invite, saveGroupSettings, prepareCatalogDraft, saveCatalogIcons, saveCatalogItem, joinGroup, leaveGroup }
 }

@@ -27,6 +27,7 @@ El controlador principal está en `/Applications/MAMP/htdocs/OV2/api/mistergasto
 - `POST /gastoteca/save_tag` y `POST /gastoteca/delete_tag`: crean, renombran o eliminan etiquetas del grupo.
 - `GET /gastoteca/telegram_settings` y `POST /gastoteca/save_telegram_settings`: consultan y guardan los tipos de aviso por Telegram.
 - `POST /gastoteca/save_catalog_icons`: guarda los iconos Iconify del grupo para establecimientos y categorías.
+- `POST /gastoteca/save_catalog_item`: crea o renombra un establecimiento o categoría y guarda su icono.
 - `POST /gastoteca/invite_email`: envía una invitación por email.
 - `POST /gastoteca/join_group`: une mediante código.
 - `POST /gastoteca/leave_group`: abandona el grupo y crea uno personal.

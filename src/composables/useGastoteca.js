@@ -269,6 +269,7 @@ export function useGastoteca() {
     saveGroupSettings,
     prepareCatalogDraft,
     saveCatalogIcons,
+    saveCatalogItem,
     joinGroup,
     leaveGroup,
   } = useGroup({
@@ -658,6 +659,7 @@ export function useGastoteca() {
     loadMoreIconPickerSearchResults,
     closeIconPicker,
     saveCatalogIcons,
+    saveCatalogItem,
     joinGroup,
     leaveGroup,
     dismissHeaderMenu,
