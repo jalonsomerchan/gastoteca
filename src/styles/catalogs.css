@@ -5,16 +5,13 @@ iconify-icon { display:inline-block; width:1em; height:1em; vertical-align:-.12e
 .catalog-tabs button { display:inline-flex; align-items:center; gap:.4rem; min-height:39px; padding:.55rem .75rem; color:var(--muted); background:transparent; border:0; border-radius:10px; font-size:.72rem; font-weight:700; }
 .catalog-tabs button.active { color:var(--green-dark); background:#fff; box-shadow:0 2px 8px #25302912; }
 .catalog-panel { overflow:hidden; background:#fff; border:1px solid var(--line); border-radius:22px; }
-.catalog-intro { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1.2rem 1.4rem; border-bottom:1px solid #edf0ed; }
-.catalog-intro strong { font-size:.85rem; }
-.catalog-intro p { margin:.3rem 0 0; color:var(--muted); font-size:.72rem; }
-.catalog-intro>a { display:inline-flex; align-items:center; gap:.3rem; flex:0 0 auto; color:var(--green); font-size:.7rem; font-weight:800; text-decoration:none; }
 .catalog-item-form { display:grid; grid-template-columns:minmax(0,1fr) 44px auto auto; align-items:end; gap:.65rem; padding:1rem 1.4rem; background:#fbfcfa; border-bottom:1px solid #edf0ed; }
 .catalog-item-form>label { grid-column:1/-1; margin-bottom:-.3rem; color:#59645f; font-size:.68rem; font-weight:700; }
 .catalog-item-form>input { width:100%; min-width:0; height:42px; padding:0 .75rem; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:11px; outline:none; }
 .catalog-item-form>input:focus { border-color:var(--green-focus); box-shadow:0 0 0 3px #2f6b5514; }
 .catalog-item-form-icon { display:grid; place-items:center; width:42px; height:42px; color:var(--green); background:var(--soft); border:1px solid #d9e6de; border-radius:12px; font-size:1.2rem; }
 .catalog-item-form .primary,.catalog-item-form .ghost { display:inline-flex; align-items:center; justify-content:center; gap:.4rem; min-height:42px; white-space:nowrap; }
+.tag-catalog-form { grid-template-columns:minmax(0,1fr) auto auto; }
 .catalog-editor-list { display:grid; }
 .catalog-editor-item { display:grid; grid-template-columns:44px minmax(0,1fr) auto; align-items:center; gap:1rem; padding:1rem 1.4rem; border-bottom:1px solid #edf0ed; }
 .catalog-item-preview { display:grid; place-items:center; width:42px; height:42px; padding:0; color:var(--green); background:var(--soft); border:1px solid transparent; border-radius:13px; font-size:1.35rem; transition:.16s; }
@@ -27,9 +24,8 @@ iconify-icon { display:inline-block; width:1em; height:1em; vertical-align:-.12e
 .catalog-empty>iconify-icon { color:var(--green); font-size:2rem; }
 .catalog-empty strong { font-family:Fraunces,serif; font-size:1.15rem; }
 .catalog-empty p { max-width:420px; margin:0; color:var(--muted); font-size:.75rem; line-height:1.5; }
-.catalog-footer { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.4rem; background:#fbfcfa; }
-.catalog-footer span { color:var(--muted); font-size:.67rem; }
-.catalog-footer a { color:var(--green); font-weight:700; }
+.catalog-footer { display:flex; align-items:center; justify-content:flex-end; gap:1rem; padding:1rem 1.4rem; background:#fbfcfa; }
+.catalog-empty>svg { width:2rem; height:2rem; color:var(--green); }
 .bar-item>span { display:grid; place-items:center; color:var(--green); }
 .icon-picker-backdrop { position:fixed; z-index:130; inset:0; display:grid; place-items:center; padding:1rem; background:#17201cba; backdrop-filter:blur(6px); }
 .icon-picker-modal { display:flex; flex-direction:column; width:min(980px,100%); max-height:min(860px,calc(100dvh - 2rem)); overflow:hidden; background:#fafaf7; border:1px solid #ffffffa8; border-radius:24px; box-shadow:0 30px 90px #0f171355; }
@@ -65,8 +61,9 @@ iconify-icon { display:inline-block; width:1em; height:1em; vertical-align:-.12e
   .catalog-tabs button { flex:1; justify-content:center; }
   .catalog-editor-item { grid-template-columns:42px minmax(0,1fr); gap:.7rem; padding:.9rem 1rem; }
   .catalog-editor-item>.small-action { grid-column:2; justify-self:start; }
-  .catalog-intro { align-items:flex-start; flex-direction:column; padding:1rem; }
+  .catalog-editor-item>.feature-row-actions { grid-column:2; justify-self:start; width:auto; }
   .catalog-item-form { grid-template-columns:minmax(0,1fr) 42px; padding:1rem; }
+  .tag-catalog-form { grid-template-columns:minmax(0,1fr) 42px; }
   .catalog-item-form>label { grid-column:1/-1; }
   .catalog-item-form>input { grid-column:1/-1; }
   .catalog-item-form .primary,.catalog-item-form .ghost { grid-column:1/-1; }

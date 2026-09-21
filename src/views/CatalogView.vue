@@ -1,14 +1,15 @@
 <script setup>
 import { reactive, watch } from 'vue'
-import { builtInCategories } from '../domain/catalogs.js'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
 import { focusElement } from '../utils/focus.js'
-import { PhMapPin, PhTag, PhArrowRight, PhCheck, PhPlus, PhPencilSimple, PhX } from '@phosphor-icons/vue'
+import { normalizeName } from '../utils/formatters.js'
+import { PhMapPin, PhTag, PhCheck, PhPlus, PhPencilSimple, PhX } from '@phosphor-icons/vue'
 
 const {
   route,
   router,
   saving,
+  expenses,
   catalogDraft,
   openIconPicker,
   saveCatalogIcons,
@@ -40,6 +41,26 @@ async function submitCatalogItem() {
   const saved = await saveCatalogItem(isEstablishments() ? 'establishment' : 'category', itemDraft.id, itemDraft.name, itemDraft.icon)
   if (saved) cancelEdit()
 }
+
+function expenseCountForEstablishment(name) {
+  return expenses.value.filter((expense) => expense.transaction_type === 'expense' && normalizeName(expense.place || '') === normalizeName(name)).length
+}
+
+function expenseCountForCategory(key) {
+  return expenses.value.filter((expense) => expense.transaction_type === 'expense' && expense.category === key).length
+}
+
+function expenseCountLabel(count) {
+  return `${count} ${count === 1 ? 'gasto' : 'gastos'}`
+}
+
+function establishmentExpenseSummary(name) {
+  return expenseCountLabel(expenseCountForEstablishment(name))
+}
+
+function categoryExpenseSummary(key) {
+  return expenseCountLabel(expenseCountForCategory(key))
+}
 </script>
 
 <template>
@@ -59,14 +80,6 @@ async function submitCatalogItem() {
     </div>
   </section>
   <section class="catalog-panel">
-    <div class="catalog-intro">
-      <div>
-        <strong>{{ route.name === 'establishments' ? catalogDraft.establishments.length : catalogDraft.categories.length }} {{ route.name === 'establishments' ? 'establecimientos' : 'categorías' }}</strong>
-        <p>Los cambios se comparten con tu grupo. Pulsa un icono para elegir entre las colecciones de Iconify.</p>
-      </div>
-      <a href="https://icon-sets.iconify.design/" target="_blank" rel="noreferrer">Explorar Iconify <PhArrowRight aria-hidden="true" :size="15" /></a>
-    </div>
-
     <form class="catalog-item-form" :aria-busy="saving" @submit.prevent="submitCatalogItem">
       <label for="catalog-item-name">{{ itemDraft.id ? 'Editar nombre' : `Nuevo ${route.name === 'establishments' ? 'establecimiento' : 'categoría'}` }}</label>
       <input id="catalog-item-name" v-model="itemDraft.name" :maxlength="route.name === 'establishments' ? 160 : 80" :placeholder="route.name === 'establishments' ? 'Por ejemplo: Cafetería Central' : 'Por ejemplo: Mascotas'" required />
@@ -82,7 +95,7 @@ async function submitCatalogItem() {
         <button type="button" class="catalog-item-preview" :aria-label="`Cambiar icono de ${item.name}`" :title="`Cambiar icono de ${item.name}`" @click="openIconPicker(item)">
           <iconify-icon aria-hidden="true" :icon="item.icon"></iconify-icon>
         </button>
-        <div class="catalog-item-name"><strong>{{ item.name }}</strong><small>Establecimiento · Pulsa el icono para cambiarlo</small></div>
+        <div class="catalog-item-name"><strong>{{ item.name }}</strong><small>{{ establishmentExpenseSummary(item.name) }}</small></div>
         <button type="button" class="ghost small-action" :aria-label="`Editar establecimiento ${item.name}`" @click="beginEdit(item)"><PhPencilSimple aria-hidden="true" :size="15" /> Editar</button>
       </article>
     </div>
@@ -91,7 +104,7 @@ async function submitCatalogItem() {
         <button type="button" class="catalog-item-preview" :aria-label="`Cambiar icono de ${item.label}`" :title="`Cambiar icono de ${item.label}`" @click="openIconPicker(item)">
           <iconify-icon aria-hidden="true" :icon="item.icon"></iconify-icon>
         </button>
-        <div class="catalog-item-name"><strong>{{ item.label }}</strong><small>{{ builtInCategories.some((categoryItem) => categoryItem.id === item.key) ? 'Categoría predeterminada' : 'Categoría personalizada' }} · Pulsa el icono para cambiarlo</small></div>
+        <div class="catalog-item-name"><strong>{{ item.label }}</strong><small>{{ categoryExpenseSummary(item.key) }}</small></div>
         <button type="button" class="ghost small-action" :aria-label="`Editar categoría ${item.label}`" @click="beginEdit(item)"><PhPencilSimple aria-hidden="true" :size="15" /> Editar</button>
       </article>
     </div>
@@ -101,7 +114,6 @@ async function submitCatalogItem() {
       <p>{{ route.name === 'establishments' ? 'Crea un establecimiento aquí o se añadirá automáticamente al guardar un movimiento.' : 'Crea una categoría aquí o al escribirla en un movimiento.' }}</p>
     </div>
     <footer class="catalog-footer">
-      <span>La vista previa usa la biblioteca <a href="https://iconify.design/" target="_blank" rel="noreferrer">Iconify</a>.</span>
       <button class="primary" :disabled="saving" @click="saveCatalogIcons"><PhCheck aria-hidden="true" :size="18" weight="bold" /> {{ saving ? 'Guardando…' : 'Guardar cambios de iconos' }}</button>
     </footer>
   </section>
