@@ -1,7 +1,8 @@
 <script setup>
+import { computed } from 'vue'
 import ExpenseCard from '../components/expenses/ExpenseCard.vue'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
-import { PhArrowRight, PhFunnel, PhCaretDown, PhReceipt, PhPlus } from '@phosphor-icons/vue'
+import { PhFunnel, PhCaretDown, PhReceipt, PhPlus } from '@phosphor-icons/vue'
 
 const {
   router,
@@ -25,11 +26,22 @@ const {
   clearFilters,
   openExpense,
 } = useGastotecaContext()
+
+const expenseItems = computed(() => expenses.value.filter((expense) => (expense.transaction_type || 'expense') === 'expense'))
+const totalExpenses = computed(() => expenseItems.value.reduce((total, expense) => total + Number(expense.amount || 0), 0))
+const lastMonthExpenses = computed(() => {
+  const cutoff = new Date()
+  cutoff.setMonth(cutoff.getMonth() - 1)
+  return expenseItems.value.reduce((total, expense) => {
+    const occurredAt = new Date(String(expense.occurred_at || '').replace(' ', 'T'))
+    return occurredAt >= cutoff ? total + Number(expense.amount || 0) : total
+  }, 0)
+})
 </script>
 
 <template>
-  <section class="balance-section" aria-label="Tu balance">
-    <div class="balance-grid single-balance">
+  <section class="balance-section dashboard-balance-section" aria-label="Resumen del balance">
+    <div class="balance-grid overview-grid">
       <button type="button"
               class="balance-card balance-summary-card"
               :class="netBalance < 0 ? 'balance-negative' : 'balance-positive'"
@@ -38,8 +50,15 @@ const {
       >
         <span>{{ netBalanceTitle }}</span>
         <strong>{{ money(Math.abs(netBalance)) }}</strong>
-        <small>Ver desglose completo <PhArrowRight aria-hidden="true" :size="16" /></small>
       </button>
+      <article class="balance-card overview-card overview-card-neutral desktop-overview-card">
+        <span>Gastos del último mes</span>
+        <strong>{{ money(lastMonthExpenses) }}</strong>
+      </article>
+      <article class="balance-card overview-card overview-card-total desktop-overview-card">
+        <span>Total gastado</span>
+        <strong>{{ money(totalExpenses) }}</strong>
+      </article>
     </div>
   </section>
 

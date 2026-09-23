@@ -38,6 +38,39 @@
 .expense-card:focus-visible { outline:3px solid var(--green-focus); outline-offset:2px; }
 .modal footer .modal-delete { margin-right:auto; }
 
+/* Expense split controls: keep payer, date and participants visible at a glance. */
+.expense-quick-fields { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; margin-top:1.25rem; }
+.quick-field { display:grid; min-width:0; gap:.4rem; }
+.quick-field>span:first-child { margin:0; color:var(--ink); font-size:.82rem; font-weight:800; }
+.select-shell { position:relative; display:flex; align-items:center; min-width:0; }
+.select-shell select,.select-shell input { width:100%; height:56px; min-width:0; padding:0 2.7rem 0 1rem; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:999px; outline:none; font-size:.92rem; font-weight:600; appearance:none; }
+.select-shell select:focus,.select-shell input:focus { border-color:var(--green-focus); box-shadow:0 0 0 3px #2f6b5514; }
+.select-shell svg { position:absolute; right:.95rem; color:var(--muted); pointer-events:none; }
+.split-fieldset { margin-top:1.7rem!important; }
+.split-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.split-heading legend { margin:0; color:var(--ink); font-size:1rem; font-weight:800; }
+.split-mode-select { position:relative; display:flex; align-items:center; min-width:0; }
+.split-mode-select select { max-width:170px; padding:.25rem 1.45rem .25rem .25rem; color:var(--muted); background:transparent; border:0; outline:none; font-size:.84rem; font-weight:700; text-align:right; appearance:none; }
+.split-mode-select select:focus { color:var(--green-dark); }
+.split-mode-select svg { position:absolute; right:.15rem; color:var(--muted); pointer-events:none; }
+.split-members-card { margin-top:.55rem; padding:0 .85rem; background:#fff; border:1px solid var(--line); border-radius:18px; box-shadow:0 5px 18px #23302808; }
+.split-member-row { position:relative; display:grid; grid-template-columns:30px minmax(0,1fr) auto; align-items:center; gap:.65rem; min-height:64px; padding:.55rem 0; border-bottom:1px solid #edf0ed; cursor:pointer; }
+.split-member-row:last-child { border-bottom:0; }
+.split-member-row>input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.split-member-row:focus-within { outline:3px solid #2f6b5514; outline-offset:3px; border-radius:10px; }
+.split-check { display:grid; place-items:center; width:28px; height:28px; color:transparent; background:#eef2ef; border:1px solid #cbd7cf; border-radius:50%; transition:.16s ease; }
+.split-member-row.selected .split-check { color:#fff; background:var(--green); border-color:var(--green); box-shadow:0 4px 10px #2f6b5530; }
+.split-member-name { min-width:0; overflow:hidden; color:var(--ink); font-size:.88rem; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+.split-member-name small { display:inline-block; margin-left:.4rem; padding:.16rem .38rem; color:var(--green-dark); background:var(--soft); border-radius:999px; font-size:.58rem; font-weight:800; vertical-align:.1rem; }
+.split-member-amount { color:var(--ink); font-size:.9rem; font-weight:800; white-space:nowrap; }
+.split-member-input { width:116px; margin:0; }
+.split-member-input input { height:40px; padding:0 1.7rem 0 .6rem; border-radius:10px; font-size:.84rem; text-align:right; }
+.split-member-input b { top:.62rem; right:.55rem; font-size:.75rem; }
+.split-member-muted { color:var(--muted); font-size:.72rem; font-weight:600; white-space:nowrap; }
+.split-empty { margin:0; padding:1rem .2rem; color:var(--muted); font-size:.74rem; line-height:1.4; }
+.split-help { display:block; margin:.55rem .15rem 0; color:var(--muted); font-size:.68rem; }
+.split-fieldset .split-summary { margin:.65rem 0 0; font-size:.72rem; }
+
 @media (min-width:901px) {
   .expense-card { grid-template-columns:48px minmax(180px,1.4fr) 140px minmax(180px,1fr) 110px; }
 }
@@ -51,4 +84,7 @@
   .choice-grid>label span { min-width:0; overflow-wrap:anywhere; }
   .modal footer { flex-wrap:wrap; }
   .confirm-dialog { max-width:100vw; overflow-wrap:anywhere; }
+  .expense-quick-fields { grid-template-columns:1fr; }
+  .split-member-row { grid-template-columns:28px minmax(0,1fr) auto; gap:.55rem; }
+  .split-member-input { width:102px; }
 }

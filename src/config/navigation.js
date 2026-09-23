@@ -1,7 +1,9 @@
-import { PhReceipt, PhChartDonut, PhWallet, PhLightning, PhTag, PhMapPin, PhUsers, PhGear } from '@phosphor-icons/vue'
+import { PhReceipt, PhChartDonut, PhWallet, PhLightning, PhTag, PhMapPin, PhUsers, PhGear, PhPencilSimple, PhFileArrowUp } from '@phosphor-icons/vue'
 
 export const navigationItems = [
   { route: 'expenses', label: 'Gastos', path: '/', icon: PhReceipt },
+  { route: 'bulk-edit', label: 'Edición masiva', path: '/edicion-masiva', icon: PhPencilSimple },
+  { route: 'import', label: 'Importar gastos', path: '/importar', icon: PhFileArrowUp },
   { route: 'stats', label: 'Estadísticas', path: '/estadisticas', icon: PhChartDonut },
   { route: 'budgets', label: 'Presupuestos', path: '/presupuestos', icon: PhWallet },
   { route: 'recurring', label: 'Recurrentes', path: '/recurrentes', icon: PhLightning },

@@ -1,4 +1,12 @@
 .balance-grid.single-balance { grid-template-columns:minmax(0,1fr); }
+.dashboard-balance-section { max-width:none; }
+.overview-grid { grid-template-columns:repeat(3,minmax(0,1fr)); max-width:none; margin:0; }
+.overview-grid .balance-card { min-width:0; }
+.overview-card { display:flex; flex-direction:column; justify-content:center; }
+.overview-card small { position:relative; z-index:1; display:block; margin-top:.55rem; color:var(--muted); font-size:.7rem; }
+.overview-card-neutral::after { background:#f1eadc; }
+.overview-card-total::after { background:var(--soft); }
+
 .balance-summary-card { display:block; width:100%; text-align:left; cursor:pointer; font:inherit; transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease; }
 .balance-summary-card:hover { transform:translateY(-2px); border-color:#b8d0c2; box-shadow:0 12px 28px #25302912; }
 .balance-summary-card small { position:relative; z-index:1; display:flex; align-items:center; gap:.35rem; margin-top:.8rem; color:var(--green); font-size:.75rem; font-weight:700; }
@@ -17,6 +25,8 @@
 .balance-entry>b { flex:0 0 auto; color:var(--ink); font-family:Fraunces,serif; font-size:.95rem; }
 
 @media (max-width:900px) {
+  .dashboard-balance-section { max-width:760px; margin:0 auto 1.25rem; }
+  .overview-grid { grid-template-columns:minmax(0,1fr); }
+  .desktop-overview-card { display:none; }
   .balance-breakdown-grid { grid-template-columns:1fr; }
 }
-

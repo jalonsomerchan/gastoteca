@@ -312,7 +312,7 @@ export function useGastoteca() {
       const authToken = await freshToken()
       const requests = [getJson('gastoteca/group', authToken)]
 
-      if (routeName === 'expenses' || routeName === 'balance') {
+      if (routeName === 'expenses' || routeName === 'balance' || routeName === 'bulk-edit') {
         requests.push(getJson('gastoteca/expenses', authToken))
       }
       if (routeName === 'stats') {
@@ -329,7 +329,7 @@ export function useGastoteca() {
       if (requestId !== routeDataRequestId || route.name !== routeName || !user.value) return
 
       group.value = groupData.group
-      if (routeName === 'expenses' || routeName === 'balance') {
+      if (routeName === 'expenses' || routeName === 'balance' || routeName === 'bulk-edit') {
         expenses.value = pageData.expenses || []
         settlements.value = pageData.settlements || []
       }

@@ -3,7 +3,7 @@ import { computed, nextTick, watch } from 'vue'
 const pageNames = {
   expenses: 'Movimientos', balance: 'Balance', stats: 'Estadísticas', budgets: 'Presupuestos',
   recurring: 'Gastos recurrentes', tags: 'Etiquetas', establishments: 'Establecimientos',
-  categories: 'Categorías', group: 'Tu grupo', settings: 'Ajustes',
+  categories: 'Categorías', 'bulk-edit': 'Edición masiva', import: 'Importar gastos', group: 'Tu grupo', settings: 'Ajustes',
 }
 
 export function usePageAccessibility({ route, loading, routeLoading, user }) {

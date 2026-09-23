@@ -5,12 +5,13 @@ import FormError from '../forms/FormError.vue'
 import BaseDialog from './BaseDialog.vue'
 import { normalizeName } from '../../utils/formatters.js'
 import { useGastotecaContext } from '../../composables/gastotecaContext.js'
-import { PhX, PhClockCounterClockwise, PhCheck, PhArrowDown, PhArrowUp, PhLightning, PhCrosshair, PhWallet, PhUsers, PhArrowRight } from '@phosphor-icons/vue'
+import { PhX, PhClockCounterClockwise, PhCheck, PhArrowDown, PhArrowUp, PhLightning, PhCrosshair, PhArrowRight, PhCaretUpDown } from '@phosphor-icons/vue'
 import Multiselect from '@vueform/multiselect'
 
 const {
   saving,
   error,
+  user,
   modalOpen,
   quickExpenseMode,
   quickAmount,
@@ -49,6 +50,32 @@ const {
 } = useGastotecaContext()
 const splitTotal = computed(() => splitMembers.value.reduce((total, member) => total + (Number(draft.participant_shares[member.uid]) || 0), 0))
 const splitTarget = computed(() => draft.share_mode === 'percent' ? 100 : Number(draft.amount) || 0)
+const payerChoice = computed({
+  get: () => draft.paid_by_type === 'all' ? 'all' : draft.paid_by_uid,
+  set: value => {
+    draft.paid_by_type = value === 'all' ? 'all' : 'person'
+    if (value !== 'all') draft.paid_by_uid = value
+  },
+})
+
+function participantSelected(uid) {
+  return draft.applies_to_all || draft.participant_uids.includes(uid)
+}
+
+function toggleParticipant(uid) {
+  const selected = new Set(draft.applies_to_all ? memberOptions.value.map(member => member.uid) : draft.participant_uids)
+  if (selected.has(uid)) selected.delete(uid)
+  else selected.add(uid)
+  const selectedUids = memberOptions.value.map(member => member.uid).filter(memberUid => selected.has(memberUid))
+  draft.applies_to_all = selectedUids.length === memberOptions.value.length
+  draft.participant_uids = draft.applies_to_all ? [] : selectedUids
+}
+
+function equalShare() {
+  const count = Math.max(1, splitMembers.value.length)
+  return money((Number(draft.amount) || 0) / count)
+}
+
 watch(() => draft.transaction_type, type => {
   if (modalOpen.value && type) focusElement('#expense-name')
 })
@@ -170,7 +197,6 @@ watch(() => draft.transaction_type, type => {
             >
               <template #clear="{ clear }"><button type="button" class="accessible-select-clear" aria-label="Borrar categoría" @mousedown.prevent @click.stop="clear"><PhX aria-hidden="true" :size="18" /></button></template>
             </Multiselect></label>
-            <label><span>Fecha y hora</span><input v-model="draft.occurred_at" type="datetime-local" /></label>
             <label><span id="expense-place-label">Establecimiento</span><Multiselect id="expense-place-select" v-model="draft.place"
                                                             class="smart-select"
                                                             :options="establishmentOptions"
@@ -214,46 +240,34 @@ watch(() => draft.transaction_type, type => {
               >{{ item.value }}<small v-if="item.count > 1">{{ item.count }}</small></button></span>
             </template><span class="location-status"><small>{{ locationStatus }}</small><button type="button" :disabled="detectingCity" @click="detectCurrentCity"><PhCrosshair aria-hidden="true" :size="14" /> {{ detectingCity ? 'Detectando…' : 'Usar mi ubicación' }}</button></span></label>
           </div>
-          <fieldset>
-            <legend>{{ draft.transaction_type === 'income' ? '¿Quién lo ha recibido?' : '¿Quién lo ha pagado?' }}</legend><div class="choice-grid">
-              <label :class="{ selected: draft.paid_by_type === 'person' }">
-                <input v-model="draft.paid_by_type" type="radio" name="draft-paid_by_type" value="person" /><PhWallet aria-hidden="true" :size="22" /><span><strong>Una persona</strong><small>{{ draft.transaction_type === 'income' ? 'Selecciona quién recibió el dinero' : 'Selecciona quién adelantó el dinero' }}</small></span>
-              </label><label :class="{ selected: draft.paid_by_type === 'all' }">
-                <input v-model="draft.paid_by_type" type="radio" name="draft-paid_by_type" value="all" /><PhUsers aria-hidden="true" :size="22" /><span><strong>Entre todos</strong><small>Corresponde al grupo en conjunto</small></span>
-              </label>
-            </div><select v-if="draft.paid_by_type === 'person'" v-model="draft.paid_by_uid" class="member-select" aria-label="Persona que paga o recibe" required>
-              <option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option>
-            </select><label class="payment-method-field">
-              <span>Método de pago</span><select v-model="draft.payment_method" class="member-select">
-                <option v-if="draft.payment_method === 'unspecified'" value="unspecified">Sin especificar</option><option v-for="method in paymentMethods" :key="method.value" :value="method.value">{{ method.label }}</option>
-              </select>
+          <div class="expense-quick-fields" aria-label="Datos principales del movimiento">
+            <label class="quick-field">
+              <span>{{ draft.transaction_type === 'income' ? 'Recibido por' : 'Pagado por' }}</span>
+              <span class="select-shell">
+                <select v-model="payerChoice" aria-label="Persona que paga o recibe" required>
+                  <option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option>
+                  <option value="all">Entre todos</option>
+                </select><PhCaretUpDown aria-hidden="true" :size="20" />
+              </span>
             </label>
-          </fieldset>
-          <fieldset>
-            <legend>{{ draft.transaction_type === 'income' ? '¿A quién corresponde?' : '¿A quién se aplica?' }}</legend><div class="choice-grid">
-              <label :class="{ selected: draft.applies_to_all }">
-                <input v-model="draft.applies_to_all" type="radio" name="draft-applies_to_all" :value="true" /><PhUsers aria-hidden="true" :size="22" /><span><strong>A todo el grupo</strong><small>Se reparte por igual</small></span>
-              </label><label :class="{ selected: !draft.applies_to_all }">
-                <input v-model="draft.applies_to_all" type="radio" name="draft-applies_to_all" :value="false" /><PhCheck aria-hidden="true" :size="22" /><span><strong>Solo a algunas</strong><small>Elige las personas</small></span>
-              </label>
-            </div><div v-if="!draft.applies_to_all" class="check-members">
-              <label v-for="member in memberOptions" :key="member.uid">
-                <input v-model="draft.participant_uids" type="checkbox" :value="member.uid" /><span class="avatar">{{ (member.name || member.email).slice(0, 1).toUpperCase() }}</span>{{ member.name || member.email }}
-              </label>
-            </div>
-          </fieldset>
+            <label class="quick-field">
+              <span>Método de pago</span>
+              <span class="select-shell">
+                <select v-model="draft.payment_method" aria-label="Método de pago">
+                  <option v-if="draft.payment_method === 'unspecified'" value="unspecified">Sin especificar</option><option v-for="method in paymentMethods" :key="method.value" :value="method.value">{{ method.label }}</option>
+                </select><PhCaretUpDown aria-hidden="true" :size="20" />
+              </span>
+            </label>
+          </div>
           <fieldset class="split-fieldset">
-            <legend>Cómo repartir {{ money(draft.amount) }}</legend><div class="choice-grid split-modes">
-              <label :class="{ selected: draft.share_mode === 'equal' }">
-                <input :checked="draft.share_mode === 'equal'" type="radio" name="draft-share_mode" @change="setShareMode('equal')" /><span><strong>Por igual</strong></span>
-              </label><label :class="{ selected: draft.share_mode === 'amount' }">
-                <input :checked="draft.share_mode === 'amount'" type="radio" name="draft-share_mode" @change="setShareMode('amount')" /><span><strong>Por cantidad</strong></span>
-              </label><label :class="{ selected: draft.share_mode === 'percent' }">
-                <input :checked="draft.share_mode === 'percent'" type="radio" name="draft-share_mode" @change="setShareMode('percent')" /><span><strong>Por porcentaje</strong></span>
-              </label>
-            </div><div v-if="draft.share_mode !== 'equal'" class="share-editor">
-              <label v-for="member in splitMembers" :key="member.uid">
-                <span>{{ member.name || member.email }}</span><div class="money-input">
+            <div class="split-heading"><legend>Dividir</legend><label class="split-mode-select"><span class="sr-only">Modo de reparto</span><select name="draft-share_mode" :value="draft.share_mode" aria-label="Modo de reparto" @change="setShareMode($event.target.value)"><option value="equal">Igualmente</option><option value="amount">Por cantidad</option><option value="percent">Por porcentaje</option></select><PhCaretUpDown aria-hidden="true" :size="18" /></label></div>
+            <div class="split-members-card" role="group" :aria-label="`Personas a las que se aplica el movimiento de ${money(draft.amount)}`">
+              <label v-for="member in memberOptions" :key="member.uid" class="split-member-row" :class="{ selected: participantSelected(member.uid) }">
+                <input type="checkbox" :checked="participantSelected(member.uid)" :aria-label="`Incluir a ${member.name || member.email}`" @change="toggleParticipant(member.uid)" />
+                <span class="split-check" aria-hidden="true"><PhCheck :size="16" weight="bold" /></span>
+                <span class="split-member-name">{{ member.name || member.email }}<small v-if="member.uid === user?.uid">Tú</small></span>
+                <span v-if="draft.share_mode === 'equal'" class="split-member-amount">{{ equalShare() }}</span>
+                <span v-else-if="participantSelected(member.uid)" class="money-input split-member-input">
                   <input v-model="draft.participant_shares[member.uid]" aria-describedby="expense-split-summary"
                          type="number" inputmode="decimal"
                          min="0"
@@ -261,9 +275,11 @@ watch(() => draft.transaction_type, type => {
                          step="0.01"
                          :aria-label="`Parte de ${member.name || member.email}`"
                   /><b>{{ draft.share_mode === 'percent' ? '%' : '€' }}</b>
-                </div>
-              </label><small>{{ draft.share_mode === 'percent' ? 'Los porcentajes deben sumar 100 %.' : 'Las cantidades deben sumar el importe total.' }}</small>
+                </span><span v-else class="split-member-muted">No participa</span>
+              </label>
+              <p v-if="!memberOptions.length" class="split-empty">Añade miembros al grupo para poder repartir este movimiento.</p>
             </div>
+            <small v-if="draft.share_mode !== 'equal'" class="split-help">{{ draft.share_mode === 'percent' ? 'Los porcentajes deben sumar 100 %.' : 'Las cantidades deben sumar el importe total.' }}</small>
             <p v-if="draft.share_mode !== 'equal'" id="expense-split-summary" class="split-summary" :class="{ invalid: Math.round(splitTotal * 100) !== Math.round(splitTarget * 100) }" role="status">
               Asignado: {{ draft.share_mode === 'percent' ? `${splitTotal.toFixed(2)} % de 100 %` : `${money(splitTotal)} de ${money(splitTarget)}` }}.
               {{ Math.round(splitTotal * 100) === Math.round(splitTarget * 100) ? 'Reparto completo.' : 'Revisa las cantidades antes de guardar.' }}

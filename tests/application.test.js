@@ -6,6 +6,7 @@ import { renderToString } from '@vue/server-renderer'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { useBalances } from '../src/composables/useBalances.js'
 import { useExpenseSuggestions } from '../src/composables/useExpenseSuggestions.js'
+import { parseBankinterRows } from '../src/domain/bankinter.js'
 
 const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' })
 after(() => server.close())
@@ -87,7 +88,7 @@ test('application state and editable drafts are isolated between instances', () 
   assert.deepEqual(second.expenses.value, [])
 })
 
-const views = { expenses: 'Expenses', balance: 'Balance', stats: 'Statistics', budgets: 'Budgets', recurring: 'Recurring', tags: 'Tags', establishments: 'Catalog', categories: 'Catalog', group: 'Group', settings: 'Settings' }
+const views = { expenses: 'Expenses', 'bulk-edit': 'BulkEdit', import: 'Import', balance: 'Balance', stats: 'Statistics', budgets: 'Budgets', recurring: 'Recurring', tags: 'Tags', establishments: 'Catalog', categories: 'Catalog', group: 'Group', settings: 'Settings' }
 for (const [route, view] of Object.entries(views)) {
   test(`renders ${route} with populated state`, async () => {
     const html = await renderComponent(`/src/views/${view}View.vue`, route)
@@ -265,4 +266,20 @@ test('monthly statistics expose a semantic table', async () => {
   const html = await renderComponent('/src/views/StatisticsView.vue', 'stats')
   assert.match(html, /<caption>Evolución del gasto mensual<\/caption>/)
   assert.match(html, /scope="row"/)
+})
+
+test('Bankinter importer maps movement rows and keeps income direction', () => {
+  const movements = parseBankinterRows([
+    ['Título'],
+    ['Fecha contable', 'Descripción', 'Importe', 'Saldo', 'Divisa'],
+    ['22/09/2026', 'CAFÉ', '-16.40', '2206.06', 'EUR'],
+    ['02/09/2026', 'TRANSFERENCIA', '600', '2451.70', 'EUR'],
+  ])
+  assert.equal(movements.length, 2)
+  assert.equal(movements[0].description, 'CAFÉ')
+  assert.equal(movements[0].name, 'CAFÉ')
+  assert.equal(movements[0].value_date, '2026-09-22T12:00')
+  assert.match(movements[0].import_key, /^bankinter:[0-9a-f]{8}$/)
+  assert.equal(movements[0].balance, 2206.06)
+  assert.equal(movements[1].transaction_type, 'income')
 })
