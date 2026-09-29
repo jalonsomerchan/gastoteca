@@ -1,7 +1,8 @@
 <script setup>
 import { RouterLink } from 'vue-router'
 import { useGastotecaContext } from '../../composables/gastotecaContext.js'
-import { PhList, PhBell, PhCheck, PhSignOut } from '@phosphor-icons/vue'
+import { ref } from 'vue'
+import { PhList, PhBell, PhCheck, PhSignOut, PhDotsThree, PhCaretDown } from '@phosphor-icons/vue'
 
 const {
   signOut,
@@ -15,11 +16,25 @@ const {
   markingNotificationIds,
   markingAllNotifications,
   navigationItems,
+  moreNavigationItems,
   notificationDateLabel,
   markNotificationRead,
   markAllNotificationsRead,
   openNotification,
 } = useGastotecaContext()
+
+const moreOpen = ref(false)
+
+function toggleMenu() {
+  menuOpen.value = !menuOpen.value
+  notificationsOpen.value = false
+  if (!menuOpen.value) moreOpen.value = false
+}
+
+function closeMenu() {
+  menuOpen.value = false
+  moreOpen.value = false
+}
 </script>
 
 <template>
@@ -35,7 +50,7 @@ const {
         :aria-expanded="menuOpen"
         :aria-label="menuOpen ? 'Cerrar menú' : 'Abrir menú'"
         aria-controls="main-navigation"
-        @click="menuOpen = !menuOpen; notificationsOpen = false"
+        @click="toggleMenu"
       >
         <PhList aria-hidden="true" :size="22" weight="regular" /><span>Menú</span>
       </button>
@@ -51,10 +66,33 @@ const {
           :to="item.path"
           :class="{ active: route.name === item.route }"
           :aria-current="route.name === item.route ? 'page' : undefined"
-          @click="menuOpen = false"
+          @click="closeMenu"
         >
           <component :is="item.icon" :size="19" weight="regular" /><span>{{ item.label }}</span>
         </RouterLink>
+        <button
+          type="button"
+          class="more-toggle"
+          :class="{ active: moreNavigationItems.some((item) => route.name === item.route) }"
+          :aria-expanded="moreOpen"
+          aria-controls="more-navigation"
+          @click="moreOpen = !moreOpen"
+        >
+          <PhDotsThree aria-hidden="true" :size="19" weight="regular" /><span>Más</span>
+          <PhCaretDown class="more-chevron" :class="{ rotated: moreOpen }" aria-hidden="true" :size="16" weight="bold" />
+        </button>
+        <div v-if="moreOpen" id="more-navigation" class="navigation-submenu">
+          <RouterLink
+            v-for="item in moreNavigationItems"
+            :key="item.route"
+            :to="item.path"
+            :class="{ active: route.name === item.route }"
+            :aria-current="route.name === item.route ? 'page' : undefined"
+            @click="closeMenu"
+          >
+            <component :is="item.icon" :size="19" weight="regular" /><span>{{ item.label }}</span>
+          </RouterLink>
+        </div>
       </nav>
     </div>
     <div v-if="user" class="notification-center" @click.stop>

@@ -6,7 +6,7 @@ import { notificationOptions, paymentMethods, paymentMethodLabel } from '../doma
 import { money, dateLabel, notificationDateLabel, monthLabel, expenseLocation } from '../utils/formatters.js'
 import { getJson, postJson } from '../lib/api.js'
 import { signInWithGoogle, hasFirebaseConfig, observeAuth, signOut } from '../lib/firebase.js'
-import { navigationItems } from '../config/navigation.js'
+import { navigationItems, moreNavigationItems } from '../config/navigation.js'
 import { useIconPicker } from './useIconPicker.js'
 import { useBalances } from './useBalances.js'
 import { useExpenseSuggestions } from './useExpenseSuggestions.js'
@@ -620,6 +620,7 @@ export function useGastoteca() {
     netBalanceTitle,
     balanceBreakdown,
     navigationItems,
+    moreNavigationItems,
     category,
     memberLabel,
     establishmentIcon,
