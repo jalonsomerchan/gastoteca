@@ -63,6 +63,9 @@ input[type='checkbox'], input[type='radio'] { flex-shrink: 0; }
 .stats-breakdown-row small { display: block; margin: -.2rem 0 .35rem; color: var(--muted); font-size: .65rem; }
 .stats-breakdown-card .data-table { display: block; overflow-x: auto; }
 @media (max-width: 900px) {
+  .expense-card { grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .expense-main > strong { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .expense-card .expense-amount { grid-column: 3; grid-row: 1; align-self: start; white-space: nowrap; }
   .expense-card .expense-people { grid-column: 2 / 4; grid-row: 2; overflow-wrap: anywhere; }
 }
 .form-error { padding: 1rem; margin-block: 1rem; border: 1px solid #b74436; border-left-width: 4px; border-radius: 12px; color: #7c251e; background: #fff2ed; }
@@ -111,9 +114,9 @@ input[type='checkbox'], input[type='radio'] { flex-shrink: 0; }
   .dialog-host .modal footer>button { flex: 1 1 auto; }
   .dialog-host .modal footer>.modal-delete { flex-basis: 100%; margin-right: 0; }
   .dialog-host .form-error { margin-inline: 1rem; }
-  .expense-card { grid-template-columns: 40px minmax(0, 1fr); gap: .65rem; }
-  .expense-card .expense-amount { grid-column: 2; grid-row: 2; text-align: right; }
-  .expense-card .expense-people { grid-column: 2; grid-row: 3; }
+  .expense-card { grid-template-columns: 40px minmax(0, 1fr) auto; gap: .65rem; }
+  .expense-card .expense-amount { grid-column: 3; grid-row: 1; align-self: start; text-align: right; white-space: nowrap; }
+  .expense-card .expense-people { grid-column: 2 / 4; grid-row: 2; }
   .expense-main span { max-width: none; white-space: normal; overflow: visible; }
   .page-heading h1 { font-size: clamp(2.2rem, 10vw, 3.4rem); overflow-wrap: anywhere; }
   .topbar { gap: .25rem; }
