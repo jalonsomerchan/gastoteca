@@ -93,6 +93,12 @@
 .bulk-modal-fields select:focus,.bulk-modal-fields input:focus { border-color:var(--green-focus); box-shadow:0 0 0 3px #2f6b5514; }
 .bulk-modal-fields .bulk-smart-select { min-height:44px; }
 .bulk-field-wide { grid-column:1/-1; }
+.bulk-member-picker { display:grid; gap:.35rem; }
+.bulk-member-picker>span { color:#59645f; font-size:.68rem; font-weight:700; }
+.bulk-member-options { display:flex; flex-wrap:wrap; gap:.4rem; padding:.55rem .65rem; background:#f8faf8; border:1px solid var(--line); border-radius:12px; }
+.bulk-member-options label { display:inline-flex; align-items:center; gap:.4rem; min-height:36px; padding:.4rem .6rem; color:var(--muted); background:#fff; border:1px solid var(--line); border-radius:9px; font-size:.7rem; font-weight:600; cursor:pointer; }
+.bulk-modal-fields .bulk-member-options input { flex:0 0 17px; width:17px; height:17px; min-height:17px; margin:0; padding:0; accent-color:var(--green); }
+.bulk-split-hint { display:block; margin:.1rem 0 0; }
 .bulk-tag-entry { display:flex; gap:.5rem; }
 .bulk-tag-entry input { flex:1; min-width:0; height:42px; padding:0 .75rem; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:11px; outline:none; }
 .bulk-tag-entry input:focus { border-color:var(--green-focus); box-shadow:0 0 0 3px #2f6b5514; }

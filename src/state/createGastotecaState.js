@@ -13,6 +13,7 @@ export function createGastotecaState() {
   const error = ref('')
   const notice = ref('')
   const expenses = ref([])
+  const newExpenseIds = ref([])
   const settlements = ref([])
   const notifications = ref([])
   const unreadNotificationCount = ref(0)
@@ -20,7 +21,7 @@ export function createGastotecaState() {
   const markingNotificationIds = ref([])
   const markingAllNotifications = ref(false)
   const group = ref(null)
-  const stats = ref({ total: 0, count: 0, average: 0, by_category: [], by_member: [], monthly: [] })
+  const stats = ref({ total: 0, count: 0, average: 0, current_month_total: 0, by_category: [], by_member: [], by_participant: [], by_title: [], by_establishment: [], by_payment_method: [], monthly: [] })
   const modalOpen = ref(false)
   const quickExpenseMode = ref(false)
   const quickAmount = ref('')
@@ -77,6 +78,7 @@ export function createGastotecaState() {
     error,
     notice,
     expenses,
+    newExpenseIds,
     settlements,
     notifications,
     unreadNotificationCount,

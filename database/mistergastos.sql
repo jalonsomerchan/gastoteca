@@ -132,6 +132,15 @@ CREATE TABLE IF NOT EXISTS mg_expense_participants (
   CONSTRAINT fk_mg_participant_expense FOREIGN KEY (expense_id) REFERENCES mg_expenses(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS mg_expense_views (
+  expense_id BIGINT UNSIGNED NOT NULL,
+  uid VARCHAR(128) NOT NULL,
+  seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (expense_id, uid),
+  KEY idx_mg_expense_views_user (uid, expense_id),
+  CONSTRAINT fk_mg_expense_view_expense FOREIGN KEY (expense_id) REFERENCES mg_expenses(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS mg_tags (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   group_id BIGINT UNSIGNED NOT NULL,

@@ -40,6 +40,7 @@ export function useExpenses({
     quickExpenseMode.value = false
     quickAmount.value = ''
     tagInput.value = ''
+    const defaultPayerUid = currentMember.value?.uid || memberOptions.value[0]?.uid || ''
     Object.assign(draft, emptyDraft(), expense ? {
       ...expense,
       transaction_type: expense.transaction_type || 'expense',
@@ -50,8 +51,11 @@ export function useExpenses({
       share_mode: 'amount',
       tags: [...(expense.tags || [])],
       recurrence: 'none',
-    } : {})
-    if (!draft.paid_by_uid) draft.paid_by_uid = currentMember.value?.uid || memberOptions.value[0]?.uid || ''
+    } : {
+      paid_by_type: 'person',
+      paid_by_uid: defaultPayerUid,
+    })
+    if (!draft.paid_by_uid) draft.paid_by_uid = defaultPayerUid
     if (!expense) draft.city = group.value?.default_city || ''
     modalOpen.value = true
     locationStatus.value = ''

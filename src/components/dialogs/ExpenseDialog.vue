@@ -4,8 +4,9 @@ import { focusElement } from '../../utils/focus.js'
 import FormError from '../forms/FormError.vue'
 import BaseDialog from './BaseDialog.vue'
 import { normalizeName } from '../../utils/formatters.js'
+import { syncTypedOption } from '../../utils/selects.js'
 import { useGastotecaContext } from '../../composables/gastotecaContext.js'
-import { PhX, PhClockCounterClockwise, PhCheck, PhArrowDown, PhArrowUp, PhLightning, PhCrosshair, PhArrowRight, PhCaretUpDown } from '@phosphor-icons/vue'
+import { PhX, PhClockCounterClockwise, PhCheck, PhArrowDown, PhArrowUp, PhLightning, PhCrosshair, PhArrowRight, PhCaretUpDown, PhTrash } from '@phosphor-icons/vue'
 import Multiselect from '@vueform/multiselect'
 
 const {
@@ -189,11 +190,12 @@ watch(() => draft.transaction_type, type => {
                                                       searchable
                                                       create-option
                                                       allow-absent
+                                                      @search-change="query => syncTypedOption(draft, 'category', query, categoryOptions)"
                                                       :can-clear="false"
                                                       :aria="{ 'aria-label': 'Categoría', 'aria-labelledby': 'expense-category-label' }"
                                                       placeholder="Busca o crea una categoría"
                                                       no-options-text="Escribe una categoría nueva"
-                                                      no-results-text="Pulsa Intro para crearla"
+                                                      no-results-text="Se añadirá al guardar"
             >
               <template #clear="{ clear }"><button type="button" class="accessible-select-clear" aria-label="Borrar categoría" @mousedown.prevent @click.stop="clear"><PhX aria-hidden="true" :size="18" /></button></template>
             </Multiselect></label>
@@ -203,11 +205,12 @@ watch(() => draft.transaction_type, type => {
                                                             searchable
                                                             create-option
                                                             allow-absent
+                                                            @search-change="query => syncTypedOption(draft, 'place', query, establishmentOptions)"
                                                             :can-clear="Boolean(draft.place)"
                                                             :aria="{ 'aria-label': 'Establecimiento', 'aria-labelledby': 'expense-place-label' }"
                                                             placeholder="Busca o escribe un establecimiento"
                                                             no-options-text="Escribe un establecimiento nuevo"
-                                                            no-results-text="Pulsa Intro para añadirlo"
+                                                            no-results-text="Se añadirá al guardar"
             >
               <template #clear="{ clear }"><button type="button" class="accessible-select-clear" aria-label="Borrar establecimiento" @mousedown.prevent @click.stop="clear"><PhX aria-hidden="true" :size="18" /></button></template>
             </Multiselect><template v-if="frequentEstablishments.length">
@@ -224,11 +227,12 @@ watch(() => draft.transaction_type, type => {
                                                    searchable
                                                    create-option
                                                    allow-absent
+                                                   @search-change="query => syncTypedOption(draft, 'city', query, cityOptions)"
                                                    :can-clear="Boolean(draft.city)"
                                                    :aria="{ 'aria-label': 'Ciudad', 'aria-labelledby': 'expense-city-label' }"
                                                    placeholder="Busca o escribe una ciudad"
                                                    no-options-text="Escribe una ciudad nueva"
-                                                   no-results-text="Pulsa Intro para añadirla"
+                                                   no-results-text="Se añadirá al guardar"
             >
               <template #clear="{ clear }"><button type="button" class="accessible-select-clear" aria-label="Borrar ciudad" @mousedown.prevent @click.stop="clear"><PhX aria-hidden="true" :size="18" /></button></template>
             </Multiselect><template v-if="frequentCities.length">
@@ -330,17 +334,20 @@ watch(() => draft.transaction_type, type => {
               </select>
             </label>
           </div>
-          <footer>
+          <footer class="expense-form-footer">
             <button v-if="draft.id"
                     type="button"
                     class="danger-button modal-delete"
+                    :aria-label="`Eliminar ${draft.transaction_type === 'income' ? 'ingreso' : 'gasto'}`"
+                    :title="`Eliminar ${draft.transaction_type === 'income' ? 'ingreso' : 'gasto'}`"
+                    :disabled="saving"
                     @click="deleteTarget = { id: draft.id, name: draft.name, transaction_type: draft.transaction_type }"
             >
-              Eliminar {{ draft.transaction_type === 'income' ? 'ingreso' : 'gasto' }}
+              <PhTrash aria-hidden="true" :size="20" />
             </button><button type="button" class="ghost" :disabled="saving" @click="closeExpenseModal">
               Cancelar
             </button><button class="primary" :disabled="saving">
-              <PhCheck aria-hidden="true" :size="18" weight="bold" /> {{ saving ? 'Guardando…' : `Guardar ${draft.transaction_type === 'income' ? 'ingreso' : 'gasto'}` }}
+              <PhCheck aria-hidden="true" :size="18" weight="bold" /> {{ saving ? 'Guardando…' : 'Guardar' }}
             </button>
           </footer>
         </template>

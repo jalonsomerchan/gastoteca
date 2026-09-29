@@ -6,7 +6,9 @@ import { PhFunnel, PhCaretDown, PhReceipt, PhPlus } from '@phosphor-icons/vue'
 
 const {
   router,
+  user,
   expenses,
+  newExpenseIds,
   filters,
   filtersOpen,
   loadMoreSentinel,
@@ -28,6 +30,13 @@ const {
 } = useGastotecaContext()
 
 const expenseItems = computed(() => expenses.value.filter((expense) => (expense.transaction_type || 'expense') === 'expense'))
+const newExpensesCount = computed(() => {
+  const newIds = new Set(newExpenseIds.value)
+  return filteredExpenses.value.filter((expense) => newIds.has(expense.id)).length
+})
+const newExpensesMessage = computed(() => newExpensesCount.value === 1
+  ? 'Hay 1 movimiento que no habías visto; ya está marcado como visto.'
+  : `Hay ${newExpensesCount.value} movimientos que no habías visto; ya están marcados como vistos.`)
 const totalExpenses = computed(() => expenseItems.value.reduce((total, expense) => total + Number(expense.amount || 0), 0))
 const lastMonthExpenses = computed(() => {
   const cutoff = new Date()
@@ -102,6 +111,7 @@ const lastMonthExpenses = computed(() => {
   <div class="expense-list-heading">
     <h1>Movimientos</h1><span aria-hidden="true">{{ filteredExpenses.length }}</span>
   </div>
+  <p v-if="newExpensesCount" class="new-expense-notice" role="status">{{ newExpensesMessage }}</p>
   <section v-if="filteredExpenses.length" class="expense-list" aria-label="Lista de movimientos">
     <ExpenseCard
       v-for="expense in visibleExpenses"
@@ -111,6 +121,8 @@ const lastMonthExpenses = computed(() => {
       :place-icon="establishmentIcon(expense.place)"
       :payer-name="memberLabel(expense.paid_by_uid)"
       :participant-names="expense.applies_to_all ? '' : expense.participant_uids.map(memberLabel).join(', ')"
+      :current-uid="user?.uid || ''"
+      :is-new="newExpenseIds.includes(expense.id)"
       @edit="openExpense(expense)"
     />
     <div v-if="hasMoreExpenses"

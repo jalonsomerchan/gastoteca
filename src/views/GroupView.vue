@@ -4,6 +4,7 @@ import ConfirmDialog from '../components/dialogs/ConfirmDialog.vue'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
 import { PhHouse, PhArrowRight, PhX } from '@phosphor-icons/vue'
 import Multiselect from '@vueform/multiselect'
+import { syncTypedOption } from '../utils/selects.js'
 
 const {
   router,
@@ -29,6 +30,9 @@ const {
 } = useGastotecaContext()
 const groupAction = ref('')
 const copyStatus = ref('')
+function syncDefaultCity(query) {
+  syncTypedOption(defaultCityDraft, null, query, cityOptions.value)
+}
 async function copyInviteCode() {
   try {
     await navigator.clipboard.writeText(group.value?.invite_code || '')
@@ -108,11 +112,12 @@ async function confirmGroupAction() {
                      searchable
                      create-option
                      allow-absent
+                     @search-change="syncDefaultCity"
                      :can-clear="Boolean(defaultCityDraft)"
                      :aria="{ 'aria-label': 'Ciudad predeterminada', 'aria-labelledby': 'group-city-label' }"
                      placeholder="Escribe o busca una ciudad"
                      no-options-text="Escribe una ciudad nueva"
-                     no-results-text="Sin coincidencias"
+                     no-results-text="Se guardará como ciudad predeterminada"
         >
               <template #clear="{ clear }"><button type="button" class="accessible-select-clear" aria-label="Borrar ciudad predeterminada" @mousedown.prevent @click.stop="clear"><PhX aria-hidden="true" :size="18" /></button></template>
             </Multiselect><button class="primary" :disabled="saving">

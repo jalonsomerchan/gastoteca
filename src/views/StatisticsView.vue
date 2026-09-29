@@ -1,5 +1,7 @@
 <script setup>
+import { computed } from 'vue'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
+import StatsBreakdownCard from '../components/statistics/StatsBreakdownCard.vue'
 import { PhChartDonut } from '@phosphor-icons/vue'
 
 const {
@@ -7,9 +9,15 @@ const {
   maxCategoryTotal,
   category,
   memberLabel,
+  paymentMethodLabel,
   money,
   monthLabel,
 } = useGastotecaContext()
+
+const titleStats = computed(() => (stats.value.by_title || []).map((item) => ({ ...item, key: item.title, label: item.title || 'Sin título' })))
+const establishmentStats = computed(() => (stats.value.by_establishment || []).map((item) => ({ ...item, key: item.establishment, label: item.establishment || 'Sin establecimiento' })))
+const participantStats = computed(() => (stats.value.by_participant || []).map((item) => ({ ...item, key: item.uid, label: memberLabel(item.uid) })))
+const paymentMethodStats = computed(() => (stats.value.by_payment_method || []).map((item) => ({ ...item, key: item.payment_method, label: paymentMethodLabel(item.payment_method) })))
 </script>
 
 <template>
@@ -17,8 +25,13 @@ const {
     <div>
       <p class="eyebrow">
         UNA MIRADA AL CONJUNTO
-      </p><h1>Estadísticas</h1><p>Descubre dónde, cuándo y entre quién se reparte el gasto.</p>
+      </p><h1>Estadísticas</h1><p>Desglosa los gastos por categoría, nombre, establecimiento, persona y método de pago.</p>
     </div>
+  </section>
+  <section class="stats-overview" aria-label="Resumen de gastos">
+    <article class="stats-overview-card"><span>Gasto total</span><strong>{{ money(stats.total) }}</strong><small>{{ stats.count }} {{ stats.count === 1 ? 'gasto registrado' : 'gastos registrados' }}</small></article>
+    <article class="stats-overview-card"><span>Este mes</span><strong>{{ money(stats.current_month_total || 0) }}</strong><small>Gasto del mes actual</small></article>
+    <article class="stats-overview-card"><span>Media por gasto</span><strong>{{ money(stats.average) }}</strong><small>Importe medio registrado</small></article>
   </section>
   <section class="stats-grid">
     <article class="chart-card wide">
@@ -57,6 +70,8 @@ const {
         </p>
       </div>
     </article>
+    <StatsBreakdownCard eyebrow="NOMBRES" title="Gasto por título" :items="titleStats" />
+    <StatsBreakdownCard eyebrow="ESTABLECIMIENTOS" title="Dónde gastáis" :items="establishmentStats" />
     <article class="chart-card">
       <div class="card-title">
         <div>
@@ -73,5 +88,7 @@ const {
         </p>
       </div>
     </article>
+    <StatsBreakdownCard eyebrow="PERSONAS" title="Gasto asignado por persona" :items="participantStats" />
+    <StatsBreakdownCard eyebrow="MÉTODOS DE PAGO" title="Cómo pagáis" :items="paymentMethodStats" />
   </section>
 </template>

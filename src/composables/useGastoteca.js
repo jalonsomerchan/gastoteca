@@ -36,6 +36,7 @@ export function useGastoteca() {
     error,
     notice,
     expenses,
+    newExpenseIds,
     settlements,
     notifications,
     unreadNotificationCount,
@@ -100,8 +101,16 @@ export function useGastoteca() {
       (!filters.to || expense.occurred_at.slice(0, 10) <= filters.to)
   }))
 
-  const visibleExpenses = computed(() => filteredExpenses.value.slice(0, visibleExpenseCount.value))
-  const hasMoreExpenses = computed(() => visibleExpenseCount.value < filteredExpenses.value.length)
+  const visibleExpenses = computed(() => {
+    const newlySeenIds = new Set(newExpenseIds.value)
+    const newExpenses = filteredExpenses.value.filter((expense) => newlySeenIds.has(expense.id))
+    const previouslySeenExpenses = filteredExpenses.value.filter((expense) => !newlySeenIds.has(expense.id))
+    return [...newExpenses, ...previouslySeenExpenses.slice(0, visibleExpenseCount.value)]
+  })
+  const hasMoreExpenses = computed(() => {
+    const newlySeenIds = new Set(newExpenseIds.value)
+    return filteredExpenses.value.filter((expense) => !newlySeenIds.has(expense.id)).length > visibleExpenseCount.value
+  })
   const activeFilterCount = computed(() => Object.values(filters).filter(Boolean).length)
 
   function flash(message) {
@@ -313,7 +322,7 @@ export function useGastoteca() {
       const requests = [getJson('gastoteca/group', authToken)]
 
       if (routeName === 'expenses' || routeName === 'balance' || routeName === 'bulk-edit') {
-        requests.push(getJson('gastoteca/expenses', authToken))
+        requests.push(getJson(routeName === 'expenses' ? 'gastoteca/expense_feed' : 'gastoteca/expenses', authToken))
       }
       if (routeName === 'stats') {
         requests.push(getJson('gastoteca/statistics', authToken))
@@ -332,8 +341,9 @@ export function useGastoteca() {
       if (routeName === 'expenses' || routeName === 'balance' || routeName === 'bulk-edit') {
         expenses.value = pageData.expenses || []
         settlements.value = pageData.settlements || []
+        newExpenseIds.value = routeName === 'expenses' ? pageData.new_expense_ids || [] : []
       }
-      if (routeName === 'stats') stats.value = pageData.stats || { total: 0, count: 0, average: 0, by_category: [], by_member: [], monthly: [] }
+      if (routeName === 'stats') stats.value = pageData.stats || { total: 0, count: 0, average: 0, current_month_total: 0, by_category: [], by_member: [], by_participant: [], by_title: [], by_establishment: [], by_payment_method: [], monthly: [] }
       if (routeName === 'settings' && featureData) {
         telegramNotificationTypes.value = featureData[0]?.notification_types || []
         telegramConfigured.value = Boolean(featureData[0]?.telegram_configured)
@@ -493,11 +503,12 @@ export function useGastoteca() {
           routeDataRequestId += 1
           routeLoading.value = false
           expenses.value = []
+          newExpenseIds.value = []
           settlements.value = []
           group.value = null
           notifications.value = []
           unreadNotificationCount.value = 0
-          stats.value = { total: 0, count: 0, average: 0, by_category: [], by_member: [], monthly: [] }
+          stats.value = { total: 0, count: 0, average: 0, current_month_total: 0, by_category: [], by_member: [], by_participant: [], by_title: [], by_establishment: [], by_payment_method: [], monthly: [] }
         }
         loading.value = false
       })
@@ -524,6 +535,7 @@ export function useGastoteca() {
     error,
     notice,
     expenses,
+    newExpenseIds,
     settlements,
     notifications,
     unreadNotificationCount,

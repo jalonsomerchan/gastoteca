@@ -7,11 +7,13 @@ import BaseDialog from '../components/dialogs/BaseDialog.vue'
 import FormError from '../components/forms/FormError.vue'
 import { PhCheck, PhFunnel, PhMagnifyingGlass, PhPencilSimple, PhPlus, PhTag, PhX } from '@phosphor-icons/vue'
 import Multiselect from '@vueform/multiselect'
+import { syncTypedOption } from '../utils/selects.js'
 
 const {
   expenses,
   group,
   user,
+  memberOptions,
   stats,
   notice,
   category,
@@ -29,7 +31,7 @@ const bulkError = ref('')
 const tagInput = ref('')
 const addTags = ref([])
 const removeTags = ref([])
-const editDraft = reactive({ category: '', cityAction: 'unchanged', city: '', placeAction: 'unchanged', place: '' })
+const editDraft = reactive({ category: '', cityAction: 'unchanged', city: '', placeAction: 'unchanged', place: '', payer: 'unchanged', participantMode: 'unchanged', participantUids: [] })
 
 const cityOptions = computed(() => [...new Set([group.value?.default_city, ...expenses.value.map(expense => expense.city)].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')))
 const placeOptions = computed(() => [...new Set([...(group.value?.establishments || []).map(item => item.name), ...expenses.value.map(expense => expense.place)].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')))
@@ -58,7 +60,7 @@ const selectedCount = computed(() => selectedIds.value.length)
 const visibleSelectedCount = computed(() => filteredExpenses.value.filter(expense => selectedIds.value.includes(expense.id)).length)
 const allVisibleSelected = computed(() => Boolean(filteredExpenses.value.length) && visibleSelectedCount.value === filteredExpenses.value.length)
 const allSelectedTags = computed(() => [...new Set(selectedExpenses.value.flatMap(expense => expense.tags || []))].sort((a, b) => a.localeCompare(b, 'es')))
-const hasChanges = computed(() => Boolean(editDraft.category || editDraft.cityAction === 'set' || editDraft.placeAction === 'set' || addTags.value.length || removeTags.value.length))
+const hasChanges = computed(() => Boolean(editDraft.category || editDraft.cityAction === 'set' || editDraft.placeAction === 'set' || editDraft.payer !== 'unchanged' || editDraft.participantMode !== 'unchanged' || addTags.value.length || removeTags.value.length))
 
 function categoryLabel(expense) {
   return category(expense.category).label
@@ -82,7 +84,7 @@ function clearSelection() {
 }
 
 function resetEditor() {
-  Object.assign(editDraft, { category: '', cityAction: 'unchanged', city: '', placeAction: 'unchanged', place: '' })
+  Object.assign(editDraft, { category: '', cityAction: 'unchanged', city: '', placeAction: 'unchanged', place: '', payer: 'unchanged', participantMode: 'unchanged', participantUids: [] })
   addTags.value = []
   removeTags.value = []
   tagInput.value = ''
@@ -120,8 +122,14 @@ function toggleRemoveTag(tag) {
 
 function payloadFor(expense) {
   const selectedTags = [...new Set([...(expense.tags || []), ...addTags.value])].filter(tag => !removeTags.value.includes(tag))
-  const participantUids = [...(expense.participant_uids || (expense.participants || []).map(participant => participant.uid))]
-  const participantShares = Object.fromEntries((expense.participants || []).map(participant => [participant.uid, Number(participant.share_amount) || 0]))
+  const replacingParticipants = editDraft.participantMode !== 'unchanged'
+  const participantUids = replacingParticipants
+    ? editDraft.participantMode === 'all' ? memberOptions.value.map(member => member.uid) : [...editDraft.participantUids]
+    : [...(expense.participant_uids || (expense.participants || []).map(participant => participant.uid))]
+  const participantShares = replacingParticipants
+    ? {}
+    : Object.fromEntries((expense.participants || []).map(participant => [participant.uid, Number(participant.share_amount) || 0]))
+  const payerChanged = editDraft.payer !== 'unchanged'
   return {
     ...expense,
     id: expense.id,
@@ -133,12 +141,12 @@ function payloadFor(expense) {
     tags: selectedTags,
     participant_uids: participantUids,
     participant_shares: participantShares,
-    share_mode: 'amount',
+    share_mode: replacingParticipants ? 'equal' : 'amount',
     details: expense.details || '',
     payment_method: expense.payment_method || 'unspecified',
-    paid_by_type: expense.paid_by_type || 'person',
-    paid_by_uid: expense.paid_by_uid || '',
-    applies_to_all: Boolean(expense.applies_to_all),
+    paid_by_type: payerChanged ? (editDraft.payer === 'all' ? 'all' : 'person') : (expense.paid_by_type || 'person'),
+    paid_by_uid: payerChanged ? (editDraft.payer === 'all' ? '' : editDraft.payer) : (expense.paid_by_uid || ''),
+    applies_to_all: editDraft.participantMode === 'unchanged' ? Boolean(expense.applies_to_all) : editDraft.participantMode === 'all',
     is_quick: Boolean(expense.is_quick),
   }
 }
@@ -152,6 +160,10 @@ async function saveBulkEdit() {
   }
   if (editDraft.placeAction === 'set' && !editDraft.place.trim()) {
     bulkError.value = 'Escribe el establecimiento que quieres aplicar.'
+    return
+  }
+  if (editDraft.participantMode === 'selected' && !editDraft.participantUids.length) {
+    bulkError.value = 'Selecciona al menos una persona a la que se aplica el movimiento.'
     return
   }
 
@@ -183,7 +195,7 @@ async function saveBulkEdit() {
     <div>
       <p class="eyebrow">ORGANIZA TUS MOVIMIENTOS</p>
       <h1>Edición masiva</h1>
-      <p>Selecciona varios movimientos y corrige categorías, etiquetas, ciudades o establecimientos de una sola vez.</p>
+      <p>Selecciona varios movimientos y corrige categorías, etiquetas, ubicación, pagador o reparto de una sola vez.</p>
     </div>
     <button type="button" class="primary" :disabled="!selectedCount" @click="openEditor()">
       <PhPencilSimple aria-hidden="true" :size="18" /> Editar seleccionados <span v-if="selectedCount">({{ selectedCount }})</span>
@@ -244,9 +256,33 @@ async function saveBulkEdit() {
           <div class="bulk-modal-fields">
             <label><span>Categoría</span><Multiselect id="bulk-category" v-model="editDraft.category" class="smart-select bulk-smart-select" :options="editCategoryOptions" :can-clear="Boolean(editDraft.category)" aria-label="Categoría a aplicar" /></label>
             <label><span>Ciudad</span><Multiselect v-model="editDraft.cityAction" class="smart-select bulk-smart-select" :options="cityActionOptions" :can-clear="false" aria-label="Acción para la ciudad" /></label>
-            <label v-if="editDraft.cityAction === 'set'" class="bulk-field-wide"><span>Nueva ciudad</span><Multiselect v-model="editDraft.city" class="smart-select bulk-smart-select" :options="cityOptions" searchable create-option allow-absent :can-clear="false" placeholder="Escribe o elige una ciudad" aria-label="Nueva ciudad" /></label>
+            <label v-if="editDraft.cityAction === 'set'" class="bulk-field-wide"><span>Nueva ciudad</span><Multiselect v-model="editDraft.city" class="smart-select bulk-smart-select" :options="cityOptions" searchable create-option allow-absent @search-change="query => syncTypedOption(editDraft, 'city', query, cityOptions)" :can-clear="false" placeholder="Escribe o elige una ciudad" aria-label="Nueva ciudad" no-results-text="Se aplicará al guardar" /></label>
             <label><span>Establecimiento</span><Multiselect v-model="editDraft.placeAction" class="smart-select bulk-smart-select" :options="placeActionOptions" :can-clear="false" aria-label="Acción para el establecimiento" /></label>
-            <label v-if="editDraft.placeAction === 'set'" class="bulk-field-wide"><span>Nuevo establecimiento</span><Multiselect v-model="editDraft.place" class="smart-select bulk-smart-select" :options="placeOptions" searchable create-option allow-absent :can-clear="false" placeholder="Escribe o elige un establecimiento" aria-label="Nuevo establecimiento" /></label>
+            <label v-if="editDraft.placeAction === 'set'" class="bulk-field-wide"><span>Nuevo establecimiento</span><Multiselect v-model="editDraft.place" class="smart-select bulk-smart-select" :options="placeOptions" searchable create-option allow-absent @search-change="query => syncTypedOption(editDraft, 'place', query, placeOptions)" :can-clear="false" placeholder="Escribe o elige un establecimiento" aria-label="Nuevo establecimiento" no-results-text="Se aplicará al guardar" /></label>
+          </div>
+        </fieldset>
+        <fieldset class="bulk-modal-fieldset">
+          <legend>Pagador y reparto</legend>
+          <div class="bulk-modal-fields">
+            <label><span>Quién pagó o recibió</span><select v-model="editDraft.payer" aria-label="Pagador o receptor a aplicar">
+              <option value="unchanged">No cambiar</option>
+              <option value="all">Entre todos</option>
+              <option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option>
+            </select></label>
+            <label><span>A quién se aplica</span><select v-model="editDraft.participantMode" aria-label="Personas a las que se aplica el movimiento">
+              <option value="unchanged">No cambiar</option>
+              <option value="all">Todo el grupo</option>
+              <option value="selected">Elegir personas</option>
+            </select></label>
+            <div v-if="editDraft.participantMode === 'selected'" class="bulk-field-wide bulk-member-picker">
+              <span>Personas incluidas</span>
+              <div class="bulk-member-options">
+                <label v-for="member in memberOptions" :key="member.uid">
+                  <input v-model="editDraft.participantUids" type="checkbox" :value="member.uid" /> {{ member.name || member.email }}
+                </label>
+              </div>
+            </div>
+            <p v-if="editDraft.participantMode !== 'unchanged'" class="bulk-field-wide bulk-modal-hint bulk-split-hint">Al cambiar el reparto, el importe se dividirá igualmente entre las personas incluidas.</p>
           </div>
         </fieldset>
         <fieldset class="bulk-modal-fieldset">
