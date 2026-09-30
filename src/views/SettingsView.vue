@@ -12,11 +12,13 @@ const {
   telegramUsername,
   telegramLinkUrl,
   telegramSaving,
+  telegramTesting,
   notificationSaving,
   notificationOptions,
   memberOptions,
   saveTelegramSettings,
   saveNotificationSettings,
+  testTelegram,
   beginTelegramLink,
   refreshTelegramStatus,
   navigateTo,
@@ -55,7 +57,7 @@ const {
       </div>
     </form>
 
-    <form class="feature-panel feature-form settings-panel" aria-label="Preferencias de Telegram" :aria-busy="telegramSaving" @submit.prevent="saveTelegramSettings">
+    <form class="feature-panel feature-form settings-panel" aria-label="Preferencias de Telegram" :aria-busy="telegramSaving || telegramTesting" @submit.prevent="saveTelegramSettings">
       <div class="feature-panel-heading">
         <div>
           <p class="eyebrow">
@@ -99,6 +101,14 @@ const {
                   @click="refreshTelegramStatus"
           >
             Actualizar conexión
+          </button>
+          <button v-if="telegramConnected"
+                  type="button"
+                  class="secondary"
+                  :disabled="telegramTesting"
+                  @click="testTelegram"
+          >
+            {{ telegramTesting ? 'Enviando…' : 'Enviar mensaje de prueba' }}
           </button>
         </div>
         <div class="settings-options">

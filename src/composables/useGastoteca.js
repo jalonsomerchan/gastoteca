@@ -67,6 +67,7 @@ export function useGastoteca() {
     telegramUsername,
     telegramLinkUrl,
     telegramSaving,
+    telegramTesting,
     notificationSaving,
     filters,
     filtersOpen,
@@ -271,10 +272,12 @@ export function useGastoteca() {
   const {
     saveTelegramSettings,
     saveNotificationSettings,
+    testTelegram,
     beginTelegramLink,
     refreshTelegramStatus,
   } = useNotificationSettings({
     telegramSaving,
+    telegramTesting,
     error,
     freshToken,
     telegramNotificationTypes,
@@ -359,7 +362,7 @@ export function useGastoteca() {
       }
       if (routeName === 'stats') stats.value = pageData.stats || { total: 0, count: 0, average: 0, current_month_total: 0, by_category: [], by_member: [], by_participant: [], by_title: [], by_establishment: [], by_payment_method: [], monthly: [] }
       if (routeName === 'settings' && featureData) {
-        telegramNotificationTypes.value = featureData[0]?.notification_types || []
+        telegramNotificationTypes.value = featureData[0]?.notification_types || notificationOptions.map((item) => item.value)
         telegramConfigured.value = Boolean(featureData[0]?.telegram_configured)
         telegramConnected.value = Boolean(featureData[1]?.telegram?.connected)
         telegramUsername.value = featureData[1]?.telegram?.username || featureData[1]?.telegram?.first_name || ''
@@ -585,6 +588,7 @@ export function useGastoteca() {
     telegramUsername,
     telegramLinkUrl,
     telegramSaving,
+    telegramTesting,
     notificationSaving,
     filters,
     filtersOpen,
@@ -678,6 +682,7 @@ export function useGastoteca() {
     removeTag,
     saveTelegramSettings,
     saveNotificationSettings,
+    testTelegram,
     beginTelegramLink,
     refreshTelegramStatus,
     saveExpense,

@@ -44,6 +44,7 @@ export function createGastotecaState() {
   const telegramUsername = ref('')
   const telegramLinkUrl = ref('')
   const telegramSaving = ref(false)
+  const telegramTesting = ref(false)
   const notificationSaving = ref(false)
   const filters = reactive({ search: '', category: '', from: '', to: '' })
   const filtersOpen = ref(false)
@@ -109,6 +110,7 @@ export function createGastotecaState() {
     telegramUsername,
     telegramLinkUrl,
     telegramSaving,
+    telegramTesting,
     notificationSaving,
     filters,
     filtersOpen,

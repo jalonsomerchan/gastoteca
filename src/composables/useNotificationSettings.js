@@ -2,6 +2,7 @@ import { postJson, getJson } from '../lib/api.js'
 
 export function useNotificationSettings({
   telegramSaving,
+  telegramTesting,
   error,
   freshToken,
   telegramNotificationTypes,
@@ -37,6 +38,17 @@ export function useNotificationSettings({
     finally { notificationSaving.value = false }
   }
 
+  async function testTelegram() {
+    if (telegramTesting.value) return
+    telegramTesting.value = true
+    error.value = ''
+    try {
+      await postJson('menudiario/telegram_test', await freshToken(true), {})
+      flash('Mensaje de prueba enviado por Telegram.')
+    } catch (reason) { error.value = reason.message }
+    finally { telegramTesting.value = false }
+  }
+
   async function beginTelegramLink() {
     error.value = ''
     try {
@@ -54,5 +66,5 @@ export function useNotificationSettings({
     } catch (reason) { error.value = reason.message }
   }
 
-  return { saveTelegramSettings, saveNotificationSettings, beginTelegramLink, refreshTelegramStatus }
+  return { saveTelegramSettings, saveNotificationSettings, testTelegram, beginTelegramLink, refreshTelegramStatus }
 }
