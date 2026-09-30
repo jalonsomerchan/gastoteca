@@ -64,7 +64,7 @@ export function createGastotecaState() {
     return { id: '', transaction_type: '', name: '', details: '', category: 'food', place: '', city: '', occurred_at: local, amount: '', payment_method: group.value?.default_payment_method || 'card', paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [], participant_shares: {}, share_mode: 'equal', tags: [], recurrence: 'none', is_quick: false }
   }
   const draft = reactive(emptyDraft())
-  const recurringDraft = reactive({ id: '', transaction_type: 'expense', name: '', amount: '', category: 'bills', frequency: 'monthly', next_at: emptyDraft().occurred_at, requires_confirmation: false, payment_method: group.value?.default_payment_method || 'card', paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [], participant_shares: {}, share_mode: 'equal', tags: [] })
+  const recurringDraft = reactive({ id: '', transaction_type: 'expense', name: '', details: '', amount: '', category: 'bills', place: '', city: '', frequency: 'monthly', next_at: emptyDraft().occurred_at, requires_confirmation: false, payment_method: group.value?.default_payment_method || 'card', paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [], participant_shares: {}, share_mode: 'equal', tags: [] })
 
   return {
     brandIconUrl,

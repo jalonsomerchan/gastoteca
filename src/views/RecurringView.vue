@@ -1,7 +1,9 @@
 <script setup>
 import { focusElement } from '../utils/focus.js'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
+import { syncTypedOption } from '../utils/selects.js'
 import { PhCheck, PhLightning } from '@phosphor-icons/vue'
+import Multiselect from '@vueform/multiselect'
 
 const {
   saving,
@@ -10,6 +12,8 @@ const {
   paymentMethods,
   paymentMethodLabel,
   categories,
+  cityOptions,
+  establishmentOptions,
   memberOptions,
   recurringDraft,
   recurringSplitMembers,
@@ -82,6 +86,37 @@ const {
         </label>
         <label class="feature-field-wide">
           <span>Aplicar desde *</span><input v-model="recurringDraft.next_at" type="datetime-local" required />
+        </label>
+        <label>
+          <span id="recurring-place-label">Establecimiento</span><Multiselect id="recurring-place-select" v-model="recurringDraft.place"
+                                                   class="smart-select"
+                                                   :options="establishmentOptions"
+                                                   searchable
+                                                   create-option
+                                                   allow-absent
+                                                   @search-change="query => syncTypedOption(recurringDraft, 'place', query, establishmentOptions)"
+                                                   :can-clear="Boolean(recurringDraft.place)"
+                                                   :aria="{ 'aria-label': 'Establecimiento', 'aria-labelledby': 'recurring-place-label' }"
+                                                   placeholder="Busca o escribe un establecimiento"
+                                                   no-options-text="Escribe un establecimiento nuevo"
+                                                   no-results-text="Se guardará al guardar la programación"
+          /></label>
+        <label>
+          <span id="recurring-city-label">Ciudad</span><Multiselect id="recurring-city-select" v-model="recurringDraft.city"
+                                          class="smart-select"
+                                          :options="cityOptions"
+                                          searchable
+                                          create-option
+                                          allow-absent
+                                          @search-change="query => syncTypedOption(recurringDraft, 'city', query, cityOptions)"
+                                          :can-clear="Boolean(recurringDraft.city)"
+                                          :aria="{ 'aria-label': 'Ciudad', 'aria-labelledby': 'recurring-city-label' }"
+                                          placeholder="Busca o escribe una ciudad"
+                                          no-options-text="Escribe una ciudad nueva"
+                                          no-results-text="Se guardará al guardar la programación"
+          /></label>
+        <label class="feature-field-wide">
+          <span>Detalles</span><textarea v-model="recurringDraft.details" maxlength="1000" rows="3" placeholder="Añade algún detalle (opcional)"></textarea>
         </label>
       </div>
       <p class="feature-field-hint">Si eliges una fecha pasada, se crearán al guardar los movimientos vencidos desde esa fecha.</p>
@@ -170,7 +205,7 @@ const {
       <div v-if="group?.recurring?.length" class="feature-list">
         <article v-for="rule in group.recurring" :key="rule.id" class="feature-list-row">
           <div class="feature-list-main">
-            <span class="feature-status-dot" :class="{ paused: !rule.active }"></span><div><strong>{{ rule.name }}</strong><small>{{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ money(rule.amount) }} · {{ paymentMethodLabel(rule.payload?.payment_method) }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }}{{ rule.requires_confirmation ? ' · Necesita confirmación' : '' }}</small><small>{{ rule.active ? 'Próximo: ' : 'Pausado · Próximo: ' }}{{ dateLabel(rule.next_at) }}</small></div>
+            <span class="feature-status-dot" :class="{ paused: !rule.active }"></span><div><strong>{{ rule.name }}</strong><small>{{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ money(rule.amount) }} · {{ paymentMethodLabel(rule.payload?.payment_method) }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }}{{ rule.requires_confirmation ? ' · Necesita confirmación' : '' }}</small><small v-if="rule.payload?.place || rule.payload?.city">{{ [rule.payload?.place, rule.payload?.city].filter(Boolean).join(' · ') }}</small><small>{{ rule.active ? 'Próximo: ' : 'Pausado · Próximo: ' }}{{ dateLabel(rule.next_at) }}</small></div>
           </div>
           <div class="feature-row-actions">
             <button type="button" class="ghost small-action" @click="startRecurringRule(rule); focusElement('#recurring-name')" :aria-label="`Editar programación ${rule.name}`">
