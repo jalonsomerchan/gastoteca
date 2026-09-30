@@ -13,6 +13,7 @@ export function useRecurring({
   recurringSplitMembers,
   saving,
   recurringDeleteTarget,
+  loadNotifications,
 }) {
   async function toggleRecurring(rule) {
     if (saving.value) return
@@ -37,6 +38,7 @@ export function useRecurring({
       category: payload.category || 'bills',
       frequency: rule?.frequency || 'monthly',
       next_at: (rule?.next_at || emptyDraft().occurred_at).replace(' ', 'T').slice(0, 16),
+      requires_confirmation: Boolean(payload.requires_confirmation),
       payment_method: payload.payment_method || group.value?.default_payment_method || 'card',
       paid_by_type: payload.paid_by_type || 'person',
       paid_by_uid: memberOptions.value.some((member) => member.uid === payload.paid_by_uid) ? payload.paid_by_uid : (currentMember.value?.uid || memberOptions.value[0]?.uid || ''),
@@ -102,6 +104,7 @@ export function useRecurring({
         participant_shares: Object.fromEntries(recurringSplitMembers.value.map((member, index) => [member.uid, Number(recurringShareValue(member, index)) || 0])),
       })
       group.value = data.group
+      await loadNotifications()
       startRecurringRule()
       flash(wasEditing ? 'Programación actualizada.' : 'Movimiento recurrente guardado.')
     } catch (reason) { error.value = reason.message }

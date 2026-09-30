@@ -48,6 +48,7 @@ const {
   setShareMode,
   addDraftTag,
   saveExpense,
+  confirmExpense,
 } = useGastotecaContext()
 const splitTotal = computed(() => splitMembers.value.reduce((total, member) => total + (Number(draft.participant_shares[member.uid]) || 0), 0))
 const splitTarget = computed(() => draft.share_mode === 'percent' ? 100 : Number(draft.amount) || 0)
@@ -153,6 +154,9 @@ watch(() => draft.transaction_type, type => {
           </div>
         </fieldset>
         <template v-if="draft.transaction_type">
+          <aside v-if="draft.confirmation_pending" class="quick-edit-notice confirmation-needed-notice">
+            <PhClockCounterClockwise aria-hidden="true" :size="18" /><span><strong>Pendiente de confirmar</strong><small>Solo tú puedes verlo. Al confirmarlo, se compartirá con el grupo.</small></span>
+          </aside>
           <aside v-if="draft.is_quick" class="quick-edit-notice">
             <PhLightning aria-hidden="true" :size="18" weight="fill" /><span><strong>Gasto rápido pendiente</strong><small>El importe ya está guardado. Añade un nombre más descriptivo y los datos que quieras.</small></span>
           </aside>
@@ -333,6 +337,15 @@ watch(() => draft.transaction_type, type => {
                 <option value="none">No repetir</option><option value="weekly">Cada semana</option><option value="monthly">Cada mes</option><option value="yearly">Cada año</option>
               </select>
             </label>
+          </div>
+          <div v-if="draft.confirmation_pending && draft.created_by === user?.uid" class="confirmation-action-row">
+            <button type="button"
+                    class="secondary confirmation-action"
+                    :disabled="saving"
+                    @click="confirmExpense(draft.id)"
+            >
+              <PhCheck aria-hidden="true" :size="18" weight="bold" /> {{ saving ? 'Confirmando…' : 'Confirmar movimiento' }}
+            </button>
           </div>
           <footer class="expense-form-footer">
             <button v-if="draft.id"

@@ -81,9 +81,11 @@ const {
           </select>
         </label>
         <label class="feature-field-wide">
-          <span>Próxima fecha de aplicación *</span><input v-model="recurringDraft.next_at" type="datetime-local" required />
+          <span>Aplicar desde *</span><input v-model="recurringDraft.next_at" type="datetime-local" required />
         </label>
       </div>
+      <p class="feature-field-hint">Si eliges una fecha pasada, se crearán al guardar los movimientos vencidos desde esa fecha.</p>
+      <label class="recurring-confirmation-option"><input v-model="recurringDraft.requires_confirmation" type="checkbox" /><span><strong>Necesita confirmación</strong><small>Cada movimiento quedará pendiente hasta que lo confirme quien creó esta programación. Mientras tanto, solo lo verá esa persona.</small></span></label>
       <fieldset class="feature-fieldset">
         <legend>{{ recurringDraft.transaction_type === 'income' ? 'Quién lo recibe' : 'Quién lo paga' }} *</legend>
         <div class="feature-choice-row">
@@ -168,7 +170,7 @@ const {
       <div v-if="group?.recurring?.length" class="feature-list">
         <article v-for="rule in group.recurring" :key="rule.id" class="feature-list-row">
           <div class="feature-list-main">
-            <span class="feature-status-dot" :class="{ paused: !rule.active }"></span><div><strong>{{ rule.name }}</strong><small>{{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ money(rule.amount) }} · {{ paymentMethodLabel(rule.payload?.payment_method) }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }}</small><small>{{ rule.active ? 'Próximo: ' : 'Pausado · Próximo: ' }}{{ dateLabel(rule.next_at) }}</small></div>
+            <span class="feature-status-dot" :class="{ paused: !rule.active }"></span><div><strong>{{ rule.name }}</strong><small>{{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ money(rule.amount) }} · {{ paymentMethodLabel(rule.payload?.payment_method) }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }}{{ rule.requires_confirmation ? ' · Necesita confirmación' : '' }}</small><small>{{ rule.active ? 'Próximo: ' : 'Pausado · Próximo: ' }}{{ dateLabel(rule.next_at) }}</small></div>
           </div>
           <div class="feature-row-actions">
             <button type="button" class="ghost small-action" @click="startRecurringRule(rule); focusElement('#recurring-name')" :aria-label="`Editar programación ${rule.name}`">

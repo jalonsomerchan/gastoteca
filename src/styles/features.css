@@ -5,6 +5,13 @@
 .feature-panel-heading h2 { margin:0; font-family:Fraunces,serif; font-size:1.55rem; letter-spacing:-.035em; }
 .feature-count { display:grid; place-items:center; min-width:31px; height:31px; padding:0 .5rem; color:var(--green); background:var(--soft); border-radius:99px; font-size:.72rem; font-weight:800; }
 .feature-fields { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
+.feature-field-hint { margin:.55rem 0 0; color:var(--muted); font-size:.68rem; line-height:1.45; }
+.recurring-confirmation-option { display:flex; align-items:flex-start; gap:.6rem; margin-top:1rem; padding:.8rem; background:#f8faf8; border:1px solid var(--line); border-radius:12px; cursor:pointer; }
+.feature-form label.recurring-confirmation-option>input { flex:0 0 auto; width:17px; height:17px; margin:.1rem 0 0; accent-color:var(--green); }
+.feature-form label.recurring-confirmation-option>span { margin:0; color:var(--ink); }
+.recurring-confirmation-option strong,.recurring-confirmation-option small { display:block; }
+.recurring-confirmation-option strong { font-size:.72rem; }
+.recurring-confirmation-option small { margin-top:.22rem; color:var(--muted); font-size:.65rem; font-weight:500; line-height:1.4; }
 .feature-form label>span,.feature-fieldset legend { display:block; margin-bottom:.38rem; color:#59645f; font-size:.68rem; font-weight:700; }
 .feature-form input:not([type=checkbox]):not([type=radio]),.feature-form select,.feature-select { width:100%; height:44px; padding:0 .78rem; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:11px; outline:none; }
 .feature-form input:focus,.feature-form select:focus,.feature-select:focus { border-color:var(--green-focus); box-shadow:0 0 0 3px #2f6b5514; }

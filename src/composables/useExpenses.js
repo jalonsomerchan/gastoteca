@@ -30,6 +30,7 @@ export function useExpenses({
   flash,
   splitMembers,
   deleteTarget,
+  loadNotifications,
 }) {
   let expenseHistoryRequestId = 0
 
@@ -293,5 +294,24 @@ export function useExpenses({
     }
   }
 
-  return { openExpense, closeExpenseModal, loadExpenseHistory, historyChangeEntries, historyValue, startQuickExpense, saveQuickExpense, selectFrequentName, setShareMode, shareValue, addDraftTag, saveExpense, removeExpense }
+  async function confirmExpense(expenseId) {
+    if (saving.value) return
+    saving.value = true
+    error.value = ''
+    try {
+      const data = await postJson('gastoteca/confirm_expense', await freshToken(true), { id: expenseId })
+      expenses.value = data.expenses || expenses.value
+      stats.value = data.stats || stats.value
+      if (data.group) group.value = data.group
+      closeExpenseModal()
+      await loadNotifications()
+      flash('Movimiento confirmado y compartido con el grupo.')
+    } catch (reason) {
+      error.value = reason.message
+    } finally {
+      saving.value = false
+    }
+  }
+
+  return { openExpense, closeExpenseModal, loadExpenseHistory, historyChangeEntries, historyValue, startQuickExpense, saveQuickExpense, selectFrequentName, setShareMode, shareValue, addDraftTag, saveExpense, confirmExpense, removeExpense }
 }

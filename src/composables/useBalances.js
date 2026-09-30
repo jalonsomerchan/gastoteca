@@ -5,7 +5,7 @@ export function useBalances({ expenses, settlements, user }) {
     const balances = new Map()
     const keyFor = (debtor, creditor) => `${debtor}::${creditor}`
     expenses.value.forEach((expense) => {
-      if ((expense.transaction_type || 'expense') !== 'expense' || expense.paid_by_type !== 'person' || !expense.paid_by_uid) return
+      if (expense.confirmation_pending || (expense.transaction_type || 'expense') !== 'expense' || expense.paid_by_type !== 'person' || !expense.paid_by_uid) return
       ;(expense.participants || []).forEach((participant) => {
         if (participant.uid === expense.paid_by_uid) return
         const key = keyFor(participant.uid, expense.paid_by_uid)

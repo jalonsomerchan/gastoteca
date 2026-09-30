@@ -37,11 +37,11 @@ const newExpensesCount = computed(() => {
 const newExpensesMessage = computed(() => newExpensesCount.value === 1
   ? 'Hay 1 movimiento que no habías visto; ya está marcado como visto.'
   : `Hay ${newExpensesCount.value} movimientos que no habías visto; ya están marcados como vistos.`)
-const totalExpenses = computed(() => expenseItems.value.reduce((total, expense) => total + Number(expense.amount || 0), 0))
+const totalExpenses = computed(() => expenseItems.value.filter((expense) => !expense.confirmation_pending).reduce((total, expense) => total + Number(expense.amount || 0), 0))
 const lastMonthExpenses = computed(() => {
   const cutoff = new Date()
   cutoff.setMonth(cutoff.getMonth() - 1)
-  return expenseItems.value.reduce((total, expense) => {
+  return expenseItems.value.filter((expense) => !expense.confirmation_pending).reduce((total, expense) => {
     const occurredAt = new Date(String(expense.occurred_at || '').replace(' ', 'T'))
     return occurredAt >= cutoff ? total + Number(expense.amount || 0) : total
   }, 0)

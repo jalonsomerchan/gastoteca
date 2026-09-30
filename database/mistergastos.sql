@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS mg_expenses (
   applies_to_all TINYINT(1) NOT NULL DEFAULT 1,
   created_by VARCHAR(128) NOT NULL,
   updated_by VARCHAR(128) NOT NULL,
+  confirmed_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -253,5 +254,5 @@ CREATE TABLE IF NOT EXISTS mg_expense_history (
   CONSTRAINT fk_mg_expense_history_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO mg_schema_version (id, version) VALUES (1, 6)
+INSERT INTO mg_schema_version (id, version) VALUES (1, 8)
 ON DUPLICATE KEY UPDATE version = VALUES(version);

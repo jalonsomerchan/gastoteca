@@ -23,7 +23,8 @@ El controlador principal está en `/Applications/MAMP/htdocs/OV2/api/mistergasto
 - `POST /gastoteca/delete_expense`: elimina un gasto.
 - `POST /gastoteca/save_settlement`: registra un pago entre dos miembros y reduce la deuda pendiente.
 - `POST /gastoteca/save_budget` y `POST /gastoteca/delete_budget`: guardan o eliminan límites mensuales por categoría.
-- `POST /gastoteca/save_recurring`, `POST /gastoteca/toggle_recurring` y `POST /gastoteca/delete_recurring`: crean, editan, pausan, reactivan o eliminan reglas recurrentes.
+- `POST /gastoteca/save_recurring`, `POST /gastoteca/toggle_recurring` y `POST /gastoteca/delete_recurring`: crean, editan, pausan, reactivan o eliminan reglas recurrentes. Cada regla puede pedir confirmación del autor antes de compartir cada movimiento; «Aplicar desde» permite materializar también una fecha ya vencida.
+- `POST /gastoteca/confirm_expense`: confirma un movimiento recurrente pendiente de su autor y lo publica al grupo.
 - `POST /gastoteca/save_tag` y `POST /gastoteca/delete_tag`: crean, renombran o eliminan etiquetas del grupo.
 - `GET /gastoteca/telegram_settings` y `POST /gastoteca/save_telegram_settings`: consultan y guardan los tipos de aviso por Telegram.
 - `POST /gastoteca/save_catalog_icons`: guarda los iconos Iconify del grupo para establecimientos y categorías.

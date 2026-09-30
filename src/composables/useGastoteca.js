@@ -191,6 +191,7 @@ export function useGastoteca() {
     shareValue,
     addDraftTag,
     saveExpense,
+    confirmExpense,
     removeExpense,
   } = useExpenses({
     error,
@@ -218,7 +219,18 @@ export function useGastoteca() {
     flash,
     splitMembers,
     deleteTarget,
+    loadNotifications,
   })
+  function openConfirmationFromRoute() {
+    const expenseId = Number(route.query.confirm_expense)
+    if (!expenseId) return
+    const expense = expenses.value.find((item) => Number(item.id) === expenseId && item.confirmation_pending)
+    if (expense) openExpense(expense)
+    const query = { ...route.query }
+    delete query.confirm_expense
+    router.replace({ path: route.path, query })
+  }
+
   const {
     openSettlement,
     saveSettlement,
@@ -253,6 +265,7 @@ export function useGastoteca() {
     recurringSplitMembers,
     saving,
     recurringDeleteTarget,
+    loadNotifications,
   })
   const { saveTag, removeTag } = useTags({ error, tagDraft, saving, freshToken, group, flash, tagDeleteTarget })
   const {
@@ -342,6 +355,7 @@ export function useGastoteca() {
         expenses.value = pageData.expenses || []
         settlements.value = pageData.settlements || []
         newExpenseIds.value = routeName === 'expenses' ? pageData.new_expense_ids || [] : []
+        if (routeName === 'expenses') openConfirmationFromRoute()
       }
       if (routeName === 'stats') stats.value = pageData.stats || { total: 0, count: 0, average: 0, current_month_total: 0, by_category: [], by_member: [], by_participant: [], by_title: [], by_establishment: [], by_payment_method: [], monthly: [] }
       if (routeName === 'settings' && featureData) {
@@ -383,6 +397,11 @@ export function useGastoteca() {
     if (route.name === 'establishments' || route.name === 'categories') prepareCatalogDraft()
     window.scrollTo({ top: 0, behavior: 'instant' })
     if (user.value) loadRouteData(route.name)
+  })
+
+  watch(() => [route.name, route.query.confirm_expense], ([routeName, expenseId], [previousRouteName]) => {
+    if (routeName === previousRouteName && routeName === 'expenses' && expenseId && expenses.value.some((expense) => Number(expense.id) === Number(expenseId) && expense.confirmation_pending))
+      openConfirmationFromRoute()
   })
 
   watch(() => group.value, () => {
@@ -662,6 +681,7 @@ export function useGastoteca() {
     beginTelegramLink,
     refreshTelegramStatus,
     saveExpense,
+    confirmExpense,
     removeExpense,
     invite,
     saveGroupSettings,
