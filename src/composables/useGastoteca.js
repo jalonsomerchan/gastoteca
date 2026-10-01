@@ -49,6 +49,12 @@ export function useGastoteca() {
     quickExpenseMode,
     quickAmount,
     quickAmountInput,
+    quickExpenseTemplates,
+    quickTemplateEditorOpen,
+    quickTemplateEditorReturnToManager,
+    quickTemplatePromptOpen,
+    quickTemplateDraft,
+    quickTemplatePrompt,
     tagInput,
     deleteTarget,
     settlementTarget,
@@ -187,6 +193,13 @@ export function useGastoteca() {
     historyValue,
     startQuickExpense,
     saveQuickExpense,
+    openQuickTemplateEditor,
+    saveQuickExpenseTemplate,
+    saveQuickExpenseTemplates,
+    cancelQuickTemplateEditor,
+    applyQuickExpenseTemplate,
+    saveQuickExpenseTemplatePrompt,
+    deleteQuickExpenseTemplate,
     selectFrequentName,
     setShareMode,
     shareValue,
@@ -200,6 +213,12 @@ export function useGastoteca() {
     expenseHistoryEntries,
     quickExpenseMode,
     quickAmount,
+    quickExpenseTemplates,
+    quickTemplateEditorOpen,
+    quickTemplateEditorReturnToManager,
+    quickTemplatePromptOpen,
+    quickTemplateDraft,
+    quickTemplatePrompt,
     tagInput,
     draft,
     emptyDraft,
@@ -336,9 +355,14 @@ export function useGastoteca() {
     try {
       const authToken = await freshToken()
       const requests = [getJson('gastoteca/group', authToken)]
+      let quickTemplateRequestIndex = -1
 
       if (routeName === 'expenses' || routeName === 'balance' || routeName === 'bulk-edit') {
         requests.push(getJson(routeName === 'expenses' ? 'gastoteca/expense_feed' : 'gastoteca/expenses', authToken))
+      }
+      if (routeName === 'expenses' || routeName === 'quick-expenses') {
+        quickTemplateRequestIndex = requests.length
+        requests.push(getJson('gastoteca/quick_expense_templates', authToken))
       }
       if (routeName === 'stats') {
         requests.push(getJson('gastoteca/statistics', authToken))
@@ -349,11 +373,14 @@ export function useGastoteca() {
           getJson('gastoteca/notification_settings', authToken),
         ]) : Promise.resolve(null)
 
-      const [groupData, pageData] = await Promise.all(requests)
+      const requestData = await Promise.all(requests)
+      const groupData = requestData[0]
+      const pageData = requestData[1]
       const featureData = await featureRequest
       if (requestId !== routeDataRequestId || route.name !== routeName || !user.value) return
 
       group.value = groupData.group
+      if (quickTemplateRequestIndex >= 0) quickExpenseTemplates.value = requestData[quickTemplateRequestIndex]?.templates || []
       if (routeName === 'expenses' || routeName === 'balance' || routeName === 'bulk-edit') {
         expenses.value = pageData.expenses || []
         settlements.value = pageData.settlements || []
@@ -526,6 +553,7 @@ export function useGastoteca() {
           routeLoading.value = false
           expenses.value = []
           newExpenseIds.value = []
+          quickExpenseTemplates.value = []
           settlements.value = []
           group.value = null
           notifications.value = []
@@ -570,6 +598,12 @@ export function useGastoteca() {
     quickExpenseMode,
     quickAmount,
     quickAmountInput,
+    quickExpenseTemplates,
+    quickTemplateEditorOpen,
+    quickTemplateEditorReturnToManager,
+    quickTemplatePromptOpen,
+    quickTemplateDraft,
+    quickTemplatePrompt,
     tagInput,
     deleteTarget,
     settlementTarget,
@@ -665,6 +699,13 @@ export function useGastoteca() {
     historyValue,
     startQuickExpense,
     saveQuickExpense,
+    openQuickTemplateEditor,
+    saveQuickExpenseTemplate,
+    saveQuickExpenseTemplates,
+    cancelQuickTemplateEditor,
+    applyQuickExpenseTemplate,
+    saveQuickExpenseTemplatePrompt,
+    deleteQuickExpenseTemplate,
     selectFrequentName,
     setShareMode,
     addDraftTag,

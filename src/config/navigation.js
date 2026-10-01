@@ -11,6 +11,7 @@ export const navigationItems = [
 
 export const moreNavigationItems = [
   { route: 'bulk-edit', label: 'Edición masiva', path: '/edicion-masiva', icon: PhPencilSimple },
+  { route: 'quick-expenses', label: 'Gastos rápidos', path: '/gastos-rapidos', icon: PhLightning },
   { route: 'import', label: 'Importar gastos', path: '/importar', icon: PhFileArrowUp },
   { route: 'tags', label: 'Etiquetas', path: '/etiquetas', icon: PhTag },
   { route: 'categories', label: 'Categorías', path: '/categorias', icon: PhTag },

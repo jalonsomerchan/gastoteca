@@ -6,7 +6,7 @@ import BaseDialog from './BaseDialog.vue'
 import { normalizeName } from '../../utils/formatters.js'
 import { syncTypedOption } from '../../utils/selects.js'
 import { useGastotecaContext } from '../../composables/gastotecaContext.js'
-import { PhX, PhClockCounterClockwise, PhCheck, PhArrowDown, PhArrowUp, PhLightning, PhCrosshair, PhArrowRight, PhCaretUpDown, PhTrash } from '@phosphor-icons/vue'
+import { PhX, PhClockCounterClockwise, PhCheck, PhArrowDown, PhArrowUp, PhLightning, PhCrosshair, PhArrowRight, PhCaretUpDown, PhTrash, PhPencilSimple, PhPlus } from '@phosphor-icons/vue'
 import Multiselect from '@vueform/multiselect'
 
 const {
@@ -17,6 +17,11 @@ const {
   quickExpenseMode,
   quickAmount,
   quickAmountInput,
+  quickExpenseTemplates,
+  quickTemplateEditorOpen,
+  quickTemplatePromptOpen,
+  quickTemplateDraft,
+  quickTemplatePrompt,
   tagInput,
   deleteTarget,
   expenseHistoryForId,
@@ -44,12 +49,25 @@ const {
   historyValue,
   startQuickExpense,
   saveQuickExpense,
+  openQuickTemplateEditor,
+  saveQuickExpenseTemplate,
+  cancelQuickTemplateEditor,
+  applyQuickExpenseTemplate,
+  saveQuickExpenseTemplatePrompt,
+  deleteQuickExpenseTemplate,
+  openIconPicker,
   selectFrequentName,
   setShareMode,
   addDraftTag,
   saveExpense,
   confirmExpense,
+  navigateTo,
 } = useGastotecaContext()
+const activeQuickExpenseTemplates = computed(() => quickExpenseTemplates.value
+  .map((template, index) => ({ template, index, order: template.sort_order === undefined ? index : Number(template.sort_order) }))
+  .filter(item => item.template.active !== false)
+  .sort((a, b) => a.order - b.order || a.index - b.index)
+  .map(item => item.template))
 const splitTotal = computed(() => splitMembers.value.reduce((total, member) => total + (Number(draft.participant_shares[member.uid]) || 0), 0))
 const splitTarget = computed(() => draft.share_mode === 'percent' ? 100 : Number(draft.amount) || 0)
 const payerChoice = computed({
@@ -57,6 +75,20 @@ const payerChoice = computed({
   set: value => {
     draft.paid_by_type = value === 'all' ? 'all' : 'person'
     if (value !== 'all') draft.paid_by_uid = value
+  },
+})
+const quickTemplatePayerChoice = computed({
+  get: () => quickTemplateDraft.paid_by_type === 'all' ? 'all' : quickTemplateDraft.paid_by_uid,
+  set: value => {
+    quickTemplateDraft.paid_by_type = value === 'all' ? 'all' : 'person'
+    quickTemplateDraft.paid_by_uid = value === 'all' ? '' : value
+  },
+})
+const quickTemplatePromptPayerChoice = computed({
+  get: () => quickTemplatePrompt.paid_by_type === 'all' ? 'all' : quickTemplatePrompt.paid_by_uid,
+  set: value => {
+    quickTemplatePrompt.paid_by_type = value === 'all' ? 'all' : 'person'
+    quickTemplatePrompt.paid_by_uid = value === 'all' ? '' : value
   },
 })
 
@@ -73,6 +105,30 @@ function toggleParticipant(uid) {
   draft.participant_uids = draft.applies_to_all ? [] : selectedUids
 }
 
+function templateParticipantSelected(uid) {
+  return quickTemplateDraft.applies_to_all || quickTemplateDraft.participant_uids.includes(uid)
+}
+
+function toggleTemplateParticipant(uid) {
+  const selected = new Set(quickTemplateDraft.applies_to_all ? memberOptions.value.map(member => member.uid) : quickTemplateDraft.participant_uids)
+  if (selected.has(uid)) selected.delete(uid)
+  else selected.add(uid)
+  const selectedUids = memberOptions.value.map(member => member.uid).filter(memberUid => selected.has(memberUid))
+  quickTemplateDraft.applies_to_all = selectedUids.length === memberOptions.value.length
+  quickTemplateDraft.participant_uids = quickTemplateDraft.applies_to_all ? [] : selectedUids
+}
+
+function quickTemplateHint(template) {
+  const fields = new Set(template.fields || [])
+  if (!fields.has('name')) return 'Completar en el formulario'
+  const prompts = []
+  if (!fields.has('amount')) prompts.push('importe')
+  if (!fields.has('paid_by_type')) prompts.push('quién paga')
+  if (prompts.length) return `Pedir ${prompts.join(' y ')}`
+  if (fields.has('amount')) return `${money(template.amount)} · Guardar con un toque`
+  return 'Completar los datos que faltan'
+}
+
 function equalShare() {
   const count = Math.max(1, splitMembers.value.length)
   return money((Number(draft.amount) || 0) / count)
@@ -80,6 +136,14 @@ function equalShare() {
 
 watch(() => draft.transaction_type, type => {
   if (modalOpen.value && type) focusElement('#expense-name')
+})
+watch(() => quickTemplateEditorOpen.value, isOpen => {
+  if (isOpen) focusElement('.quick-template-title input')
+  else if (modalOpen.value) focusElement('#expense-title')
+})
+watch(() => quickTemplatePromptOpen.value, isOpen => {
+  if (isOpen) focusElement(quickTemplatePrompt.askAmount ? '#quick-template-prompt-amount' : '#quick-template-prompt-payer')
+  else if (modalOpen.value) focusElement('#expense-title')
 })
 </script>
 
@@ -89,7 +153,7 @@ watch(() => draft.transaction_type, type => {
     >
       <header>
         <p id="expense-title" tabindex="-1" data-initial-focus class="eyebrow modal-title">
-          {{ quickExpenseMode ? 'Gasto rápido' : draft.id ? 'Editar movimiento' : draft.transaction_type ? (draft.transaction_type === 'income' ? 'Nuevo ingreso' : 'Nuevo gasto') : 'Nuevo movimiento' }}
+          {{ quickExpenseMode ? 'Gasto rápido' : quickTemplatePromptOpen ? quickTemplatePrompt.title : quickTemplateEditorOpen ? 'Configurar gasto rápido' : draft.id ? 'Editar movimiento' : draft.transaction_type ? (draft.transaction_type === 'income' ? 'Nuevo ingreso' : 'Nuevo gasto') : 'Nuevo movimiento' }}
         </p><button class="icon-button" aria-label="Cerrar diálogo" :disabled="saving" @click="closeExpenseModal">
           <PhX aria-hidden="true" :size="22" />
         </button>
@@ -133,6 +197,95 @@ watch(() => draft.transaction_type, type => {
           </button>
         </footer>
       </form>
+      <section v-else-if="quickTemplatePromptOpen" class="quick-template-prompt">
+        <p class="quick-template-intro">Completa lo que falta para guardar este gasto rápido.</p>
+        <label v-if="quickTemplatePrompt.askAmount" for="quick-template-prompt-amount" class="quick-template-prompt-field">
+          <span>Importe *</span><div class="money-input"><input id="quick-template-prompt-amount" v-model="quickTemplatePrompt.amount" type="number" inputmode="decimal" min="0.01" max="99999999" step="0.01" placeholder="0,00" required /><b>€</b></div>
+        </label>
+        <label v-if="quickTemplatePrompt.askPayer" for="quick-template-prompt-payer" class="quick-template-prompt-field">
+          <span>¿Quién ha pagado? *</span><select id="quick-template-prompt-payer" v-model="quickTemplatePromptPayerChoice" required><option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option><option value="all">Entre todos</option></select>
+        </label>
+        <p class="quick-template-prompt-note">El resto de los datos configurados se añadirá automáticamente.</p>
+        <footer>
+          <button type="button" class="ghost" :disabled="saving" @click="quickTemplatePromptOpen = false">Volver</button>
+          <button type="button" class="primary" :disabled="saving" @click="saveQuickExpenseTemplatePrompt"><PhCheck aria-hidden="true" :size="18" weight="bold" /> {{ saving ? 'Guardando…' : 'Añadir gasto' }}</button>
+        </footer>
+      </section>
+      <section v-else-if="quickTemplateEditorOpen" class="quick-template-editor">
+        <p class="quick-template-intro">Elige qué datos se rellenarán automáticamente. Si incluyes nombre e importe, podrás guardar el gasto con un toque.</p>
+        <label class="quick-template-title">
+          <span>Nombre del botón *</span><input v-model="quickTemplateDraft.title" maxlength="60" placeholder="Café, compra semanal…" required />
+        </label>
+        <div class="quick-template-icon-setting">
+          <span class="quick-template-icon-preview"><iconify-icon aria-hidden="true" :icon="quickTemplateDraft.icon || 'mdi:lightning-bolt-outline'"></iconify-icon></span>
+          <button type="button" class="secondary" @click="openIconPicker(quickTemplateDraft)">Elegir icono</button>
+          <small>Se mostrará junto al nombre del gasto rápido.</small>
+        </div>
+        <fieldset class="quick-template-settings">
+          <legend>Campos que se guardan automáticamente</legend>
+          <div class="quick-template-setting">
+            <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="name" /> Nombre del gasto</label>
+            <input v-model="quickTemplateDraft.name" :disabled="!quickTemplateDraft.fields.includes('name')" maxlength="160" placeholder="Comida, billete, café…" aria-label="Nombre del gasto rápido" />
+          </div>
+          <div class="quick-template-setting">
+            <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="amount" /> Importe</label>
+            <div class="money-input"><input v-model="quickTemplateDraft.amount" :disabled="!quickTemplateDraft.fields.includes('amount')" type="number" min="0.01" max="99999999" step="0.01" placeholder="Preguntar al usarlo" aria-label="Importe del gasto rápido" /><b>€</b></div>
+          </div>
+          <div class="quick-template-setting">
+            <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="category" /> Categoría</label>
+            <select v-model="quickTemplateDraft.category" :disabled="!quickTemplateDraft.fields.includes('category')" aria-label="Categoría del gasto rápido"><option v-for="option in categoryOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select>
+          </div>
+          <div class="quick-template-setting">
+            <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="place" /> Establecimiento</label>
+            <input v-model="quickTemplateDraft.place" :disabled="!quickTemplateDraft.fields.includes('place')" maxlength="160" placeholder="Dónde sueles comprar" aria-label="Establecimiento del gasto rápido" />
+          </div>
+          <div class="quick-template-setting">
+            <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="city" /> Ciudad</label>
+            <input v-model="quickTemplateDraft.city" :disabled="!quickTemplateDraft.fields.includes('city')" maxlength="120" placeholder="Usar la ciudad predeterminada" aria-label="Ciudad del gasto rápido" />
+          </div>
+          <div class="quick-template-setting">
+            <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="occurred_at" /> Fecha y hora</label>
+            <input v-model="quickTemplateDraft.occurred_at" :disabled="!quickTemplateDraft.fields.includes('occurred_at')" type="datetime-local" aria-label="Fecha y hora del gasto rápido" />
+            <small v-if="quickTemplateDraft.fields.includes('occurred_at')">Déjalo vacío para usar el momento en que añadas el gasto.</small>
+          </div>
+          <div class="quick-template-setting">
+            <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="paid_by_type" /> Quién paga</label>
+            <select v-model="quickTemplatePayerChoice" :disabled="!quickTemplateDraft.fields.includes('paid_by_type')" aria-label="Persona que paga el gasto rápido"><option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option><option value="all">Entre todos</option></select>
+          </div>
+          <div class="quick-template-setting quick-template-participants">
+            <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="participants" /> Reparto entre</label>
+            <label class="template-all-members"><input v-model="quickTemplateDraft.applies_to_all" :disabled="!quickTemplateDraft.fields.includes('participants')" type="checkbox" /> Todo el grupo</label>
+            <div v-if="!quickTemplateDraft.applies_to_all" class="template-member-list">
+              <label v-for="member in memberOptions" :key="member.uid"><input type="checkbox" :checked="templateParticipantSelected(member.uid)" :disabled="!quickTemplateDraft.fields.includes('participants')" @change="toggleTemplateParticipant(member.uid)" />{{ member.name || member.email }}</label>
+            </div>
+            <select v-model="quickTemplateDraft.share_mode" :disabled="!quickTemplateDraft.fields.includes('participants')" aria-label="Modo de reparto"><option value="equal">Dividir igualmente</option><option value="amount">Por cantidades</option><option value="percent">Por porcentajes</option></select>
+            <div v-if="quickTemplateDraft.fields.includes('participants') && quickTemplateDraft.share_mode !== 'equal'" class="template-share-values">
+              <label v-for="member in memberOptions.filter(item => quickTemplateDraft.applies_to_all || quickTemplateDraft.participant_uids.includes(item.uid))" :key="member.uid">{{ member.name || member.email }}<input v-model="quickTemplateDraft.participant_shares[member.uid]" type="number" min="0" step="0.01" :aria-label="`Parte de ${member.name || member.email}`" /></label>
+              <small>Las cantidades o porcentajes deben sumar el total o el 100 % al guardar.</small>
+            </div>
+          </div>
+          <div class="quick-template-setting">
+            <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="payment_method" /> Método de pago</label>
+            <select v-model="quickTemplateDraft.payment_method" :disabled="!quickTemplateDraft.fields.includes('payment_method')" aria-label="Método de pago del gasto rápido"><option v-for="method in paymentMethods" :key="method.value" :value="method.value">{{ method.label }}</option></select>
+          </div>
+          <div class="quick-template-setting">
+            <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="details" /> Detalles</label>
+            <textarea v-model="quickTemplateDraft.details" :disabled="!quickTemplateDraft.fields.includes('details')" maxlength="1000" rows="2" placeholder="Notas que se añadirán al gasto" aria-label="Detalles del gasto rápido"></textarea>
+          </div>
+          <div class="quick-template-setting">
+            <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="tags" /> Etiquetas</label>
+            <input v-model="quickTemplateDraft.tags_text" :disabled="!quickTemplateDraft.fields.includes('tags')" maxlength="420" placeholder="Separadas por comas" aria-label="Etiquetas del gasto rápido" />
+          </div>
+          <div class="quick-template-setting">
+            <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="recurrence" /> Repetir automáticamente</label>
+            <select v-model="quickTemplateDraft.recurrence" :disabled="!quickTemplateDraft.fields.includes('recurrence')" aria-label="Frecuencia del gasto rápido"><option value="none">No repetir</option><option value="weekly">Cada semana</option><option value="monthly">Cada mes</option><option value="yearly">Cada año</option></select>
+          </div>
+        </fieldset>
+        <footer>
+          <button type="button" class="ghost" :disabled="saving" @click="cancelQuickTemplateEditor">Cancelar</button>
+          <button type="button" class="primary" :disabled="saving" @click="saveQuickExpenseTemplate"><PhCheck aria-hidden="true" :size="18" weight="bold" /> {{ saving ? 'Guardando…' : 'Guardar gasto rápido' }}</button>
+        </footer>
+      </section>
       <form :aria-busy="saving" v-else @submit.prevent="saveExpense">
         <fieldset v-if="!draft.id && !draft.transaction_type" class="transaction-type">
           <legend>Primero, selecciona el tipo *</legend><div class="choice-grid transaction-options">
@@ -151,6 +304,15 @@ watch(() => draft.transaction_type, type => {
             </label><button type="button" class="quick-expense-choice" @click="startQuickExpense">
               <PhLightning aria-hidden="true" :size="22" weight="fill" /><span><strong>Gasto rápido</strong><small>Guardar solo el importe</small></span>
             </button>
+            <div v-for="template in activeQuickExpenseTemplates" :key="template.id" class="quick-template-option">
+              <button type="button" class="quick-expense-choice saved-quick-expense" :disabled="saving" @click="applyQuickExpenseTemplate(template)">
+                <iconify-icon aria-hidden="true" :icon="template.icon || 'mdi:lightning-bolt-outline'"></iconify-icon><span><strong>{{ template.title }}</strong><small>{{ quickTemplateHint(template) }}</small></span>
+              </button>
+              <button type="button" class="icon-button quick-template-edit" :aria-label="`Editar ${template.title}`" title="Editar gasto rápido" :disabled="saving" @click="openQuickTemplateEditor(template)"><PhPencilSimple aria-hidden="true" :size="17" /></button>
+              <button type="button" class="icon-button quick-template-delete" :aria-label="`Eliminar ${template.title}`" title="Eliminar gasto rápido" :disabled="saving" @click="deleteQuickExpenseTemplate(template)"><PhTrash aria-hidden="true" :size="17" /></button>
+            </div>
+            <button type="button" class="quick-template-create" :disabled="saving || quickExpenseTemplates.length >= 12" @click="openQuickTemplateEditor()"><PhPlus aria-hidden="true" :size="18" /><span><strong>Configurar gasto rápido</strong><small>{{ quickExpenseTemplates.length >= 12 ? 'Has alcanzado el máximo de 12' : 'Elige qué datos se guardan automáticamente' }}</small></span></button>
+            <button v-if="quickExpenseTemplates.length" type="button" class="quick-template-manage" :disabled="saving" @click="closeExpenseModal(); navigateTo('/gastos-rapidos')">Gestionar gastos rápidos</button>
           </div>
         </fieldset>
         <template v-if="draft.transaction_type">

@@ -5,6 +5,7 @@ export default createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', name: 'expenses', component: () => import('./views/ExpensesView.vue') },
+    { path: '/gastos-rapidos', name: 'quick-expenses', component: () => import('./views/QuickExpensesView.vue') },
     { path: '/edicion-masiva', name: 'bulk-edit', component: () => import('./views/BulkEditView.vue') },
     { path: '/importar', name: 'import', component: () => import('./views/ImportView.vue') },
     { path: '/balance', name: 'balance', component: () => import('./views/BalanceView.vue') },

@@ -10,6 +10,12 @@ export function useExpenses({
   expenseHistoryEntries,
   quickExpenseMode,
   quickAmount,
+  quickExpenseTemplates,
+  quickTemplateEditorOpen,
+  quickTemplateEditorReturnToManager,
+  quickTemplatePromptOpen,
+  quickTemplateDraft,
+  quickTemplatePrompt,
   tagInput,
   draft,
   emptyDraft,
@@ -39,6 +45,8 @@ export function useExpenses({
     expenseHistoryForId.value = 0
     expenseHistoryEntries.value = []
     quickExpenseMode.value = false
+    quickTemplateEditorOpen.value = false
+    quickTemplatePromptOpen.value = false
     quickAmount.value = ''
     tagInput.value = ''
     const defaultPayerUid = currentMember.value?.uid || memberOptions.value[0]?.uid || ''
@@ -65,6 +73,9 @@ export function useExpenses({
   function closeExpenseModal() {
     modalOpen.value = false
     quickExpenseMode.value = false
+    quickTemplateEditorOpen.value = false
+    quickTemplateEditorReturnToManager.value = false
+    quickTemplatePromptOpen.value = false
     quickAmount.value = ''
     expenseHistoryForId.value = 0
     expenseHistoryEntries.value = []
@@ -107,9 +118,221 @@ export function useExpenses({
   }
 
   function startQuickExpense() {
+    quickTemplateEditorOpen.value = false
+    quickTemplatePromptOpen.value = false
     quickExpenseMode.value = true
     quickAmount.value = ''
     nextTick(() => quickAmountInput.value?.focus())
+  }
+
+  function openQuickTemplateEditor(template = null, returnToManager = false) {
+    error.value = ''
+    quickTemplateEditorReturnToManager.value = returnToManager
+    if (returnToManager) modalOpen.value = true
+    quickExpenseMode.value = false
+    quickTemplatePromptOpen.value = false
+    quickTemplateEditorOpen.value = true
+    const defaultPayerUid = currentMember.value?.uid || memberOptions.value[0]?.uid || ''
+    Object.assign(quickTemplateDraft, {
+      id: template?.id || '',
+      title: template?.title || '',
+      icon: template?.icon || 'mdi:lightning-bolt-outline',
+      fields: [...(template?.fields || ['name', 'amount', 'category', 'paid_by_type'])],
+      name: template?.name || '',
+      amount: template?.amount ?? '',
+      category: template?.category || 'other',
+      place: template?.place || '',
+      city: template?.city || group.value?.default_city || '',
+      details: template?.details || '',
+      payment_method: template?.payment_method || group.value?.default_payment_method || 'card',
+      paid_by_type: template?.paid_by_type || 'person',
+      paid_by_uid: template?.paid_by_uid || defaultPayerUid,
+      applies_to_all: template?.applies_to_all ?? true,
+      participant_uids: [...(template?.participant_uids || [])],
+      share_mode: template?.share_mode || 'equal',
+      participant_shares: { ...(template?.participant_shares || {}) },
+      tags_text: (template?.tags || []).join(', '),
+      recurrence: template?.recurrence || 'none',
+      occurred_at: template?.occurred_at || '',
+    })
+  }
+
+  function cancelQuickTemplateEditor() {
+    if (quickTemplateEditorReturnToManager.value) closeExpenseModal()
+    else quickTemplateEditorOpen.value = false
+  }
+
+  async function saveQuickExpenseTemplates(templates, notice = '') {
+    if (saving.value) return false
+    saving.value = true
+    error.value = ''
+    const orderedTemplates = templates.map((template, sort_order) => ({
+      ...template,
+      active: template.active !== false,
+      sort_order,
+    }))
+    try {
+      const data = await postJson('gastoteca/save_quick_expense_templates', await freshToken(true), { templates: orderedTemplates })
+      quickExpenseTemplates.value = data.templates || orderedTemplates
+      if (notice) flash(notice)
+      return true
+    } catch (reason) {
+      error.value = reason.message
+      return false
+    } finally {
+      saving.value = false
+    }
+  }
+
+  async function saveQuickExpenseTemplate() {
+    if (saving.value) return
+    error.value = ''
+    const template = quickTemplateDraft
+    const fields = [...new Set(template.fields)]
+    const title = template.title.trim().slice(0, 60)
+    if (!title) {
+      error.value = 'Pon un nombre para este gasto rápido.'
+      return
+    }
+    if (!fields.length) {
+      error.value = 'Elige al menos un campo para guardar automáticamente.'
+      return
+    }
+    if (fields.includes('name') && !template.name.trim()) {
+      error.value = 'Añade el nombre del gasto o desmarca ese campo.'
+      return
+    }
+    if (fields.includes('amount') && !isPositiveAmount(template.amount)) {
+      error.value = 'Añade un importe válido o desmarca ese campo.'
+      return
+    }
+    if (fields.includes('paid_by_type') && template.paid_by_type === 'person' && !memberOptions.value.some(member => member.uid === template.paid_by_uid)) {
+      error.value = 'Selecciona quién paga este gasto rápido.'
+      return
+    }
+    const participantUids = template.applies_to_all
+      ? memberOptions.value.map(member => member.uid)
+      : template.participant_uids.filter(uid => memberOptions.value.some(member => member.uid === uid))
+    if (fields.includes('participants') && !participantUids.length) {
+      error.value = 'Selecciona al menos una persona para repartir este gasto.'
+      return
+    }
+    if (!template.id && quickExpenseTemplates.value.length >= 12) {
+      error.value = 'Ya has creado el máximo de 12 gastos rápidos.'
+      return
+    }
+
+    const savedTemplate = {
+      id: template.id || globalThis.crypto?.randomUUID?.() || `quick-${Date.now()}`,
+      title,
+      icon: template.icon || 'mdi:lightning-bolt-outline',
+      fields,
+      name: template.name.trim(),
+      amount: template.amount === '' ? '' : Number(template.amount).toFixed(2),
+      category: template.category || 'other',
+      place: template.place.trim(),
+      city: template.city.trim(),
+      details: template.details.trim(),
+      payment_method: template.payment_method,
+      paid_by_type: template.paid_by_type,
+      paid_by_uid: template.paid_by_type === 'person' ? template.paid_by_uid : '',
+      applies_to_all: template.applies_to_all,
+      participant_uids: template.applies_to_all ? [] : participantUids,
+      share_mode: template.share_mode,
+      participant_shares: template.share_mode === 'equal' ? {} : { ...template.participant_shares },
+      tags: template.tags_text.split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 10),
+      recurrence: template.recurrence,
+      occurred_at: template.occurred_at,
+      active: template.active !== false,
+      sort_order: Number.isInteger(template.sort_order) ? template.sort_order : quickExpenseTemplates.value.length,
+    }
+
+    const templates = [...quickExpenseTemplates.value]
+    const existingIndex = templates.findIndex(item => item.id === savedTemplate.id)
+    if (existingIndex >= 0) templates[existingIndex] = savedTemplate
+    else templates.push(savedTemplate)
+    if (!await saveQuickExpenseTemplates(templates)) return
+    quickTemplateEditorOpen.value = false
+    if (quickTemplateEditorReturnToManager.value) closeExpenseModal()
+    flash('Gasto rápido guardado.')
+  }
+
+  async function deleteQuickExpenseTemplate(template) {
+    const templates = quickExpenseTemplates.value.filter(item => item.id !== template.id)
+    return saveQuickExpenseTemplates(templates, `«${template.title}» eliminado.`)
+  }
+
+  async function applyQuickExpenseTemplate(template) {
+    quickTemplateEditorOpen.value = false
+    quickTemplatePromptOpen.value = false
+    const fields = new Set(template.fields || [])
+    const defaultPayerUid = currentMember.value?.uid || memberOptions.value[0]?.uid || ''
+    Object.assign(draft, emptyDraft(), {
+      transaction_type: 'expense',
+      name: fields.has('name') ? template.name : '',
+      amount: fields.has('amount') ? String(template.amount) : '',
+      category: fields.has('category') ? template.category : 'other',
+      place: fields.has('place') ? template.place : '',
+      city: fields.has('city') ? template.city : (group.value?.default_city || ''),
+      details: fields.has('details') ? template.details : '',
+      payment_method: fields.has('payment_method') ? template.payment_method : (group.value?.default_payment_method || 'card'),
+      paid_by_type: fields.has('paid_by_type') ? template.paid_by_type : 'person',
+      paid_by_uid: fields.has('paid_by_type') && template.paid_by_type === 'person' && memberOptions.value.some(member => member.uid === template.paid_by_uid)
+        ? template.paid_by_uid
+        : defaultPayerUid,
+      applies_to_all: fields.has('participants') ? Boolean(template.applies_to_all) : true,
+      participant_uids: fields.has('participants') && !template.applies_to_all
+        ? template.participant_uids.filter(uid => memberOptions.value.some(member => member.uid === uid))
+        : [],
+      participant_shares: fields.has('participants') ? { ...(template.participant_shares || {}) } : {},
+      share_mode: fields.has('participants') ? (template.share_mode || 'equal') : 'equal',
+      tags: fields.has('tags') ? [...(template.tags || [])] : [],
+      recurrence: fields.has('recurrence') ? template.recurrence : 'none',
+      occurred_at: fields.has('occurred_at') && template.occurred_at ? template.occurred_at : emptyDraft().occurred_at,
+      is_quick: false,
+    })
+    quickExpenseMode.value = false
+    modalOpen.value = true
+    locationStatus.value = ''
+    if (!fields.has('name')) return
+
+    const askAmount = !fields.has('amount')
+    const askPayer = !fields.has('paid_by_type')
+    if (askAmount || askPayer) {
+      Object.assign(quickTemplatePrompt, {
+        templateId: template.id,
+        title: template.title,
+        askAmount,
+        askPayer,
+        amount: '',
+        paid_by_type: 'person',
+        paid_by_uid: currentMember.value?.uid || memberOptions.value[0]?.uid || '',
+      })
+      quickTemplatePromptOpen.value = true
+      return
+    }
+    await saveExpense()
+  }
+
+  async function saveQuickExpenseTemplatePrompt() {
+    if (saving.value) return
+    error.value = ''
+    if (quickTemplatePrompt.askAmount) {
+      if (!isPositiveAmount(quickTemplatePrompt.amount)) {
+        error.value = 'Añade un importe mayor que cero.'
+        return
+      }
+      draft.amount = Number(quickTemplatePrompt.amount).toFixed(2)
+    }
+    if (quickTemplatePrompt.askPayer) {
+      if (quickTemplatePrompt.paid_by_type === 'person' && !memberOptions.value.some(member => member.uid === quickTemplatePrompt.paid_by_uid)) {
+        error.value = 'Selecciona quién ha pagado el gasto.'
+        return
+      }
+      draft.paid_by_type = quickTemplatePrompt.paid_by_type === 'all' ? 'all' : 'person'
+      draft.paid_by_uid = draft.paid_by_type === 'all' ? '' : quickTemplatePrompt.paid_by_uid
+    }
+    await saveExpense()
   }
 
   async function saveQuickExpense() {
@@ -313,5 +536,5 @@ export function useExpenses({
     }
   }
 
-  return { openExpense, closeExpenseModal, loadExpenseHistory, historyChangeEntries, historyValue, startQuickExpense, saveQuickExpense, selectFrequentName, setShareMode, shareValue, addDraftTag, saveExpense, confirmExpense, removeExpense }
+  return { openExpense, closeExpenseModal, loadExpenseHistory, historyChangeEntries, historyValue, startQuickExpense, saveQuickExpense, openQuickTemplateEditor, saveQuickExpenseTemplate, saveQuickExpenseTemplates, cancelQuickTemplateEditor, applyQuickExpenseTemplate, saveQuickExpenseTemplatePrompt, deleteQuickExpenseTemplate, selectFrequentName, setShareMode, shareValue, addDraftTag, saveExpense, confirmExpense, removeExpense }
 }

@@ -26,6 +26,41 @@ export function createGastotecaState() {
   const quickExpenseMode = ref(false)
   const quickAmount = ref('')
   const quickAmountInput = ref(null)
+  const quickExpenseTemplates = ref([])
+  const quickTemplateEditorOpen = ref(false)
+  const quickTemplateEditorReturnToManager = ref(false)
+  const quickTemplatePromptOpen = ref(false)
+  const quickTemplateDraft = reactive({
+    id: '',
+    title: '',
+    icon: 'mdi:lightning-bolt-outline',
+    fields: ['name', 'amount', 'category', 'paid_by_type'],
+    name: '',
+    amount: '',
+    category: 'other',
+    place: '',
+    city: '',
+    details: '',
+    payment_method: 'card',
+    paid_by_type: 'person',
+    paid_by_uid: '',
+    applies_to_all: true,
+    participant_uids: [],
+    share_mode: 'equal',
+    participant_shares: {},
+    tags_text: '',
+    recurrence: 'none',
+    occurred_at: '',
+  })
+  const quickTemplatePrompt = reactive({
+    templateId: '',
+    title: '',
+    askAmount: false,
+    askPayer: false,
+    amount: '',
+    paid_by_type: 'person',
+    paid_by_uid: '',
+  })
   const tagInput = ref('')
   const deleteTarget = ref(null)
   const settlementTarget = ref(null)
@@ -92,6 +127,12 @@ export function createGastotecaState() {
     quickExpenseMode,
     quickAmount,
     quickAmountInput,
+    quickExpenseTemplates,
+    quickTemplateEditorOpen,
+    quickTemplateEditorReturnToManager,
+    quickTemplatePromptOpen,
+    quickTemplateDraft,
+    quickTemplatePrompt,
     tagInput,
     deleteTarget,
     settlementTarget,
