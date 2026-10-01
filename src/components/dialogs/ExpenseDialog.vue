@@ -233,15 +233,54 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
           </div>
           <div class="quick-template-setting">
             <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="category" /> Categoría</label>
-            <select v-model="quickTemplateDraft.category" :disabled="!quickTemplateDraft.fields.includes('category')" aria-label="Categoría del gasto rápido"><option v-for="option in categoryOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select>
+            <Multiselect id="quick-template-category-select" v-model="quickTemplateDraft.category"
+                         class="smart-select"
+                         :options="categoryOptions"
+                         :disabled="!quickTemplateDraft.fields.includes('category')"
+                         searchable
+                         create-option
+                         allow-absent
+                         @search-change="query => syncTypedOption(quickTemplateDraft, 'category', query, categoryOptions)"
+                         :can-clear="false"
+                         :aria="{ 'aria-label': 'Categoría del gasto rápido' }"
+                         placeholder="Busca o crea una categoría"
+                         no-options-text="Escribe una categoría nueva"
+                         no-results-text="Se guardará al guardar la plantilla"
+            />
           </div>
           <div class="quick-template-setting">
             <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="place" /> Establecimiento</label>
-            <input v-model="quickTemplateDraft.place" :disabled="!quickTemplateDraft.fields.includes('place')" maxlength="160" placeholder="Dónde sueles comprar" aria-label="Establecimiento del gasto rápido" />
+            <Multiselect id="quick-template-place-select" v-model="quickTemplateDraft.place"
+                         class="smart-select"
+                         :options="establishmentOptions"
+                         :disabled="!quickTemplateDraft.fields.includes('place')"
+                         searchable
+                         create-option
+                         allow-absent
+                         @search-change="query => syncTypedOption(quickTemplateDraft, 'place', query, establishmentOptions)"
+                         :can-clear="Boolean(quickTemplateDraft.place)"
+                         :aria="{ 'aria-label': 'Establecimiento del gasto rápido' }"
+                         placeholder="Busca o escribe un establecimiento"
+                         no-options-text="Escribe un establecimiento nuevo"
+                         no-results-text="Se guardará al guardar la plantilla"
+            />
           </div>
           <div class="quick-template-setting">
             <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="city" /> Ciudad</label>
-            <input v-model="quickTemplateDraft.city" :disabled="!quickTemplateDraft.fields.includes('city')" maxlength="120" placeholder="Usar la ciudad predeterminada" aria-label="Ciudad del gasto rápido" />
+            <Multiselect id="quick-template-city-select" v-model="quickTemplateDraft.city"
+                         class="smart-select"
+                         :options="cityOptions"
+                         :disabled="!quickTemplateDraft.fields.includes('city')"
+                         searchable
+                         create-option
+                         allow-absent
+                         @search-change="query => syncTypedOption(quickTemplateDraft, 'city', query, cityOptions)"
+                         :can-clear="Boolean(quickTemplateDraft.city)"
+                         :aria="{ 'aria-label': 'Ciudad del gasto rápido' }"
+                         placeholder="Busca o escribe una ciudad"
+                         no-options-text="Escribe una ciudad nueva"
+                         no-results-text="Se guardará al guardar la plantilla"
+            />
           </div>
           <div class="quick-template-setting">
             <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="occurred_at" /> Fecha y hora</label>

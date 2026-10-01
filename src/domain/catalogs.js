@@ -23,6 +23,7 @@ export const paymentMethods = [
   { value: 'cash', label: 'Efectivo' },
   { value: 'transfer', label: 'Transferencia bancaria' },
   { value: 'bizum', label: 'Bizum' },
+  { value: 'cobee', label: 'Cobee' },
   { value: 'other', label: 'Otro' },
 ]
 

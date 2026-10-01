@@ -40,6 +40,7 @@
 .quick-template-setting>label:first-child { display:flex; align-items:center; gap:.55rem; color:var(--ink); font-size:.77rem; font-weight:700; }
 .quick-template-setting>label:first-child input[type=checkbox],.template-all-members input,.template-member-list input { width:18px; height:18px; min-height:18px; margin:0; padding:0; accent-color:var(--green); }
 .quick-template-setting>input,.quick-template-setting>select,.quick-template-setting>textarea,.quick-template-setting>.money-input { width:100%; min-width:0; min-height:42px; padding:.55rem .7rem; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:10px; font:inherit; font-size:.8rem; }
+.quick-template-setting>.smart-select { grid-column:2; width:100%; min-width:0; }
 .quick-template-setting>.money-input { padding:0; }
 .quick-template-setting>.money-input input { width:100%; min-width:0; height:42px; padding:0 2rem 0 .7rem; border:0; background:transparent; font:inherit; font-size:.8rem; }
 .quick-template-setting>.money-input b { top:.72rem; }
