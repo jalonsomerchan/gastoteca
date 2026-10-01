@@ -6,7 +6,7 @@ import BaseDialog from './BaseDialog.vue'
 import { normalizeName } from '../../utils/formatters.js'
 import { syncTypedOption } from '../../utils/selects.js'
 import { useGastotecaContext } from '../../composables/gastotecaContext.js'
-import { PhX, PhClockCounterClockwise, PhCheck, PhArrowDown, PhArrowUp, PhLightning, PhCrosshair, PhArrowRight, PhCaretUpDown, PhTrash, PhPencilSimple, PhPlus } from '@phosphor-icons/vue'
+import { PhX, PhClockCounterClockwise, PhCheck, PhArrowDown, PhArrowUp, PhLightning, PhCrosshair, PhArrowRight, PhCaretUpDown, PhTrash, PhPlus } from '@phosphor-icons/vue'
 import Multiselect from '@vueform/multiselect'
 
 const {
@@ -54,7 +54,6 @@ const {
   cancelQuickTemplateEditor,
   applyQuickExpenseTemplate,
   saveQuickExpenseTemplatePrompt,
-  deleteQuickExpenseTemplate,
   openIconPicker,
   selectFrequentName,
   setShareMode,
@@ -347,8 +346,6 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
               <button type="button" class="quick-expense-choice saved-quick-expense" :disabled="saving" @click="applyQuickExpenseTemplate(template)">
                 <iconify-icon aria-hidden="true" :icon="template.icon || 'mdi:lightning-bolt-outline'"></iconify-icon><span><strong>{{ template.title }}</strong><small>{{ quickTemplateHint(template) }}</small></span>
               </button>
-              <button type="button" class="icon-button quick-template-edit" :aria-label="`Editar ${template.title}`" title="Editar gasto rápido" :disabled="saving" @click="openQuickTemplateEditor(template)"><PhPencilSimple aria-hidden="true" :size="17" /></button>
-              <button type="button" class="icon-button quick-template-delete" :aria-label="`Eliminar ${template.title}`" title="Eliminar gasto rápido" :disabled="saving" @click="deleteQuickExpenseTemplate(template)"><PhTrash aria-hidden="true" :size="17" /></button>
             </div>
             <button type="button" class="quick-template-create" :disabled="saving || quickExpenseTemplates.length >= 12" @click="openQuickTemplateEditor()"><PhPlus aria-hidden="true" :size="18" /><span><strong>Configurar gasto rápido</strong><small>{{ quickExpenseTemplates.length >= 12 ? 'Has alcanzado el máximo de 12' : 'Elige qué datos se guardan automáticamente' }}</small></span></button>
             <button v-if="quickExpenseTemplates.length" type="button" class="quick-template-manage" :disabled="saving" @click="closeExpenseModal(); navigateTo('/gastos-rapidos')">Gestionar gastos rápidos</button>
