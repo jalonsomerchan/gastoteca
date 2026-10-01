@@ -339,16 +339,18 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
                      value="income"
                      required
               /><PhArrowUp aria-hidden="true" :size="22" /><span><strong>Ingreso</strong><small>Dinero que ha entrado</small></span>
-            </label><button type="button" class="quick-expense-choice" @click="startQuickExpense">
-              <PhLightning aria-hidden="true" :size="22" weight="fill" /><span><strong>Gasto rápido</strong><small>Guardar solo el importe</small></span>
+            </label><p class="quick-expense-section-label quick-expense-pending-label">Gasto puntual · sin plantilla</p><button type="button" class="quick-expense-choice quick-expense-pending" @click="startQuickExpense">
+              <PhLightning aria-hidden="true" :size="22" weight="fill" /><span><strong>Guardar solo el importe</strong><small>Completarás los datos del gasto después</small></span>
             </button>
+            <p class="quick-expense-section-label saved-quick-expenses-label">Plantillas guardadas · reutilizables</p>
+            <p v-if="!activeQuickExpenseTemplates.length" class="quick-template-empty-hint">{{ quickExpenseTemplates.length ? 'No hay plantillas activas. Puedes volver a activarlas desde Gestionar plantillas.' : 'Crea una plantilla para añadir gastos frecuentes con un toque.' }}</p>
             <div v-for="template in activeQuickExpenseTemplates" :key="template.id" class="quick-template-option">
               <button type="button" class="quick-expense-choice saved-quick-expense" :disabled="saving" @click="applyQuickExpenseTemplate(template)">
                 <iconify-icon aria-hidden="true" :icon="template.icon || 'mdi:lightning-bolt-outline'"></iconify-icon><span><strong>{{ template.title }}</strong><small>{{ quickTemplateHint(template) }}</small></span>
               </button>
             </div>
-            <button type="button" class="quick-template-create" :disabled="saving || quickExpenseTemplates.length >= 12" @click="openQuickTemplateEditor()"><PhPlus aria-hidden="true" :size="18" /><span><strong>Configurar gasto rápido</strong><small>{{ quickExpenseTemplates.length >= 12 ? 'Has alcanzado el máximo de 12' : 'Elige qué datos se guardan automáticamente' }}</small></span></button>
-            <button v-if="quickExpenseTemplates.length" type="button" class="quick-template-manage" :disabled="saving" @click="closeExpenseModal(); navigateTo('/gastos-rapidos')">Gestionar gastos rápidos</button>
+            <button type="button" class="quick-template-create" :disabled="saving || quickExpenseTemplates.length >= 12" @click="openQuickTemplateEditor()"><PhPlus aria-hidden="true" :size="18" /><span><strong>Crear plantilla</strong><small>{{ quickExpenseTemplates.length >= 12 ? 'Has alcanzado el máximo de 12' : 'Elige qué datos rellenar automáticamente' }}</small></span></button>
+            <button v-if="quickExpenseTemplates.length" type="button" class="quick-template-manage" :disabled="saving" @click="closeExpenseModal(); navigateTo('/gastos-rapidos')">Gestionar plantillas</button>
           </div>
         </fieldset>
         <template v-if="draft.transaction_type">
