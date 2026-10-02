@@ -364,6 +364,49 @@ test('editing an own shared template can make it private and preserves its inact
   assert.equal(payload.templates[0].active, false)
 })
 
+test('quick template saves cleared establishment and city without losing the other fields', async t => {
+  let payload
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    payload = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ data: { templates: payload.templates } }) }
+  })
+  const editor = expenseEditor()
+  const template = quickTemplate({ place: 'Restaurante', city: 'Madrid', fields: ['name', 'amount', 'paid_by_type', 'place', 'city'] })
+  editor.quickExpenseTemplates.value = [template]
+  editor.openQuickTemplateEditor(template, true)
+  editor.quickTemplateDraft.place = null
+  editor.quickTemplateDraft.city = null
+  editor.quickTemplateDraft.details = null
+  editor.quickTemplateDraft.tags_text = null
+  await editor.saveQuickExpenseTemplate()
+  const saved = payload.templates[0]
+  assert.equal(saved.place, '')
+  assert.equal(saved.city, '')
+  assert.equal(saved.details, '')
+  assert.deepEqual(saved.tags, [])
+  assert.equal(saved.name, 'Café')
+  assert.equal(saved.amount, '2.50')
+  assert.deepEqual(saved.fields, template.fields)
+  assert.equal(editor.error.value, '')
+  assert.equal(editor.modalOpen.value, false)
+})
+
+test('quick template null required names show validation errors and keep the editor open', async t => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => { throw new Error('Unexpected API request') })
+  const editor = expenseEditor()
+  editor.openQuickTemplateEditor(quickTemplate(), true)
+  editor.quickTemplateDraft.title = null
+  await editor.saveQuickExpenseTemplate()
+  assert.match(editor.error.value, /Pon un nombre/)
+  editor.quickTemplateDraft.title = 'Café'
+  editor.quickTemplateDraft.name = null
+  await editor.saveQuickExpenseTemplate()
+  assert.match(editor.error.value, /Añade el nombre del gasto/)
+  assert.equal(editor.quickTemplateEditorOpen.value, true)
+  assert.equal(editor.modalOpen.value, true)
+  assert.equal(fetchMock.mock.callCount(), 0)
+})
+
 test('deleting an own template does not delete another creator template with the same id', async t => {
   let payload
   const shared = quickTemplate({ created_by: 'bob', visibility: 'group', can_edit: false })

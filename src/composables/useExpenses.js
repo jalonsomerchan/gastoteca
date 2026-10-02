@@ -247,8 +247,10 @@ export function useExpenses({
     if (saving.value) return
     error.value = ''
     const template = quickTemplateDraft
+    const cleanText = value => String(value ?? '').trim()
     const fields = [...new Set(template.fields)]
-    const title = template.title.trim().slice(0, 60)
+    const title = cleanText(template.title).slice(0, 60)
+    const name = cleanText(template.name)
     if (!title) {
       error.value = 'Pon un nombre para este gasto rápido.'
       return
@@ -257,7 +259,7 @@ export function useExpenses({
       error.value = 'Elige al menos un campo para guardar automáticamente.'
       return
     }
-    if (fields.includes('name') && !template.name.trim()) {
+    if (fields.includes('name') && !name) {
       error.value = 'Añade el nombre del gasto o desmarca ese campo.'
       return
     }
@@ -288,12 +290,12 @@ export function useExpenses({
       visibility: template.visibility === 'group' ? 'group' : 'private',
       created_by: currentMember.value?.uid || '',
       fields,
-      name: template.name.trim(),
+      name,
       amount: template.amount === '' ? '' : Number(template.amount).toFixed(2),
       category: template.category || 'other',
-      place: template.place.trim(),
-      city: template.city.trim(),
-      details: template.details.trim(),
+      place: cleanText(template.place),
+      city: cleanText(template.city),
+      details: cleanText(template.details),
       payment_method: template.payment_method,
       paid_by_type: template.paid_by_type,
       paid_by_uid: template.paid_by_type === 'person' ? template.paid_by_uid : '',
@@ -301,7 +303,7 @@ export function useExpenses({
       participant_uids: template.applies_to_all ? [] : participantUids,
       share_mode: template.share_mode,
       participant_shares: template.share_mode === 'equal' ? {} : { ...template.participant_shares },
-      tags: template.tags_text.split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 10),
+      tags: cleanText(template.tags_text).split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 10),
       recurrence: template.recurrence,
       occurred_at: template.occurred_at,
       active: template.active !== false,
