@@ -1,6 +1,7 @@
 <script setup>
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
 import { PhCheck, PhArrowRight, PhUsers, PhCloudArrowUp } from '@phosphor-icons/vue'
+import SummarySettingsPanel from '../components/settings/SummarySettingsPanel.vue'
 
 const {
   user,
@@ -20,6 +21,14 @@ const {
   backupSending,
   saveBackupSettings,
   sendBackupNow,
+  summaryDraft,
+  summaryStatus,
+  summaryPeriod,
+  summarySaving,
+  summarySending,
+  summaryOptions,
+  saveSummarySettings,
+  sendSummaryNow,
   notificationOptions,
   memberOptions,
   saveTelegramSettings,
@@ -196,6 +205,20 @@ const backupDate = value => new Intl.DateTimeFormat('es-ES', {
         </button>
       </div>
     </form>
+
+    <SummarySettingsPanel
+      v-model:period="summaryPeriod"
+      :schedules="summaryDraft"
+      :status="summaryStatus"
+      :options="summaryOptions"
+      :connected="telegramConnected"
+      :configured="telegramConfigured"
+      :saving="summarySaving"
+      :sending="summarySending"
+      @update-schedule="({ period, field, value }) => summaryDraft[period][field] = value"
+      @save="saveSummarySettings"
+      @send="sendSummaryNow"
+    />
 
     <article class="feature-panel settings-account-panel">
       <div class="feature-panel-heading">

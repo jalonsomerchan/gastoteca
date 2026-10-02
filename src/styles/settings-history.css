@@ -22,6 +22,17 @@
 .settings-backup-fields label>span { color:var(--muted); font-size:.875rem; font-weight:700; }
 .settings-backup-fields :is(select,input) { width:100%; min-width:0; min-height:44px; padding:.6rem .75rem; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:11px; font:inherit; }
 @media (max-width:580px) { .settings-backup-fields { grid-template-columns:1fr; }.settings-backup-manual button { width:100%; } }
+.summary-manual { grid-template-columns:minmax(0,1fr) auto; align-items:end; padding-bottom:1rem; }
+.summary-manual button { min-height:44px; }
+.summary-schedules { display:grid; gap:.85rem; }
+.summary-schedule { min-width:0; margin:0; padding:1rem; border:1px solid var(--line); border-radius:14px; }
+.summary-toggle { display:flex; align-items:flex-start; gap:.65rem; cursor:pointer; min-height:44px; }
+.summary-toggle input { width:18px; height:18px; margin:.15rem 0 0; accent-color:var(--green); flex:0 0 auto; }
+.summary-toggle>span { display:grid; gap:.2rem; }
+.summary-toggle strong { color:var(--ink); font-size:.9rem; }
+.summary-toggle small { color:var(--muted); font-size:.875rem; line-height:1.5; }
+.summary-schedule .settings-backup-fields { margin-top:.8rem; grid-template-columns:repeat(2,minmax(0,1fr)); }
+@media (max-width:580px) { .summary-manual,.summary-schedule .settings-backup-fields { grid-template-columns:1fr; }.summary-manual button { width:100%; } }
 .settings-account-row { display:flex; align-items:center; gap:.7rem; min-height:60px; padding:.55rem 0; border-top:1px solid #edf0ed; }
 .settings-account-row>div { flex:1; min-width:0; }
 .settings-account-row strong,.settings-account-row small { display:block; overflow:hidden; text-overflow:ellipsis; }

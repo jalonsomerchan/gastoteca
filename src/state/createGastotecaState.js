@@ -87,6 +87,11 @@ export function createGastotecaState() {
   const backupStatus = reactive({ next_run_at: null, last_sent_at: null })
   const backupSaving = ref(false)
   const backupSending = ref(false)
+  const summaryDraft = reactive(Object.fromEntries(['daily', 'weekly', 'monthly'].map(period => [period, { enabled: false, time: '09:00', weekday: 1, monthday: 1 }])))
+  const summaryStatus = reactive(Object.fromEntries(['daily', 'weekly', 'monthly'].map(period => [period, { next_run_at: null, last_sent_at: null }])))
+  const summaryPeriod = ref('weekly')
+  const summarySaving = ref(false)
+  const summarySending = ref('')
   const filters = reactive({ search: '', category: '', from: '', to: '' })
   const filtersOpen = ref(false)
   const visibleExpenseCount = ref(20)
@@ -164,6 +169,11 @@ export function createGastotecaState() {
     backupStatus,
     backupSaving,
     backupSending,
+    summaryDraft,
+    summaryStatus,
+    summaryPeriod,
+    summarySaving,
+    summarySending,
     filters,
     filtersOpen,
     visibleExpenseCount,

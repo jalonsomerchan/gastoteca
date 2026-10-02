@@ -19,6 +19,7 @@ import { useRecurring } from './useRecurring.js'
 import { useTags } from './useTags.js'
 import { useNotificationSettings } from './useNotificationSettings.js'
 import { useBackups } from './useBackups.js'
+import { useSummaries, summaryOptions } from './useSummaries.js'
 import { useGroup } from './useGroup.js'
 
 // One instance per application. Feature modules receive explicit reactive dependencies.
@@ -81,6 +82,11 @@ export function useGastoteca() {
     backupStatus,
     backupSaving,
     backupSending,
+    summaryDraft,
+    summaryStatus,
+    summaryPeriod,
+    summarySaving,
+    summarySending,
     filters,
     filtersOpen,
     visibleExpenseCount,
@@ -319,6 +325,9 @@ export function useGastoteca() {
   const { applyBackupSettings, saveBackupSettings, sendBackupNow } = useBackups({
     backupDraft, backupStatus, backupSaving, backupSending, freshToken, error, flash,
   })
+  const { applySummarySettings, saveSummarySettings, sendSummaryNow } = useSummaries({
+    summaryDraft, summaryStatus, summaryPeriod, summarySaving, summarySending, freshToken, error, flash,
+  })
   const {
     invite,
     saveGroupSettings,
@@ -383,6 +392,7 @@ export function useGastoteca() {
           getJson('menudiario/telegram_status', authToken).catch(() => null),
           getJson('gastoteca/notification_settings', authToken),
           getJson('gastoteca/backup_settings', authToken),
+          getJson('gastoteca/summary_settings', authToken),
         ]) : Promise.resolve(null)
 
       const requestData = await Promise.all(requests)
@@ -407,6 +417,7 @@ export function useGastoteca() {
         telegramUsername.value = featureData[1]?.telegram?.username || featureData[1]?.telegram?.first_name || ''
         appNotificationTypes.value = featureData[2]?.notification_types || notificationOptions.map((item) => item.value)
         applyBackupSettings(featureData[3])
+        applySummarySettings(featureData[4])
       }
       await loadNotifications()
     } catch (reason) {
@@ -581,6 +592,7 @@ export function useGastoteca() {
           notifications.value = []
           unreadNotificationCount.value = 0
           applyBackupSettings()
+          applySummarySettings()
           stats.value = { total: 0, count: 0, average: 0, current_month_total: 0, by_category: [], by_member: [], by_participant: [], by_title: [], by_establishment: [], by_payment_method: [], monthly: [] }
         }
         loading.value = false
@@ -653,6 +665,12 @@ export function useGastoteca() {
     backupStatus,
     backupSaving,
     backupSending,
+    summaryDraft,
+    summaryStatus,
+    summaryPeriod,
+    summarySaving,
+    summarySending,
+    summaryOptions,
     filters,
     filtersOpen,
     loadMoreSentinel,
@@ -761,6 +779,8 @@ export function useGastoteca() {
     saveExpense,
     saveBackupSettings,
     sendBackupNow,
+    saveSummarySettings,
+    sendSummaryNow,
     confirmExpense,
     removeExpense,
     invite,
