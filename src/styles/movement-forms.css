@@ -1,7 +1,6 @@
-.transaction-options { grid-template-columns:1fr 1fr; }
+.transaction-options { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .quick-expense-section-label { display:flex; grid-column:1/-1; align-items:center; gap:.6rem; margin:.45rem 0 -.15rem; color:#59645f; font-size:.62rem; font-weight:850; letter-spacing:.09em; text-transform:uppercase; }
 .quick-expense-section-label::after { flex:1; border-top:1px solid var(--line); content:''; }
-.quick-expense-pending-label { color:#8b5b2c; }
 .quick-expense-choice { display:flex; align-items:center; gap:.7rem; min-height:62px; grid-column:1/-1; padding:.75rem .9rem; color:#8b5b2c; background:#fff8e9; border:1px dashed #e8c98f; border-radius:14px; text-align:left; }
 .quick-expense-choice:hover { background:#fff2d6; border-color:#d8ae63; }
 .quick-expense-choice>span strong,.quick-expense-choice>span small { display:block; }
@@ -77,8 +76,6 @@
 .modal-error { margin:0 1.6rem .8rem; font-size:.78rem; }
 
 @media (max-width:580px) {
-  .transaction-options { grid-template-columns:1fr; }
-  .quick-expense-choice { grid-column:auto; }
   .quick-template-editor { padding:0 1rem calc(1rem + env(safe-area-inset-bottom)); }
   .quick-template-prompt { padding:0 1rem calc(1rem + env(safe-area-inset-bottom)); }
   .quick-template-setting,.quick-template-participants { grid-template-columns:1fr; }

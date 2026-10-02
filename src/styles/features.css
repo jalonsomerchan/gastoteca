@@ -71,7 +71,6 @@
 .quick-template-management-actions .small-action { gap:.3rem; }
 .quick-template-management-empty { padding:3.2rem 1rem; }
 .quick-template-management-empty .primary { margin-top:.6rem; }
-.quick-template-manage { grid-column:1/-1; justify-self:start; padding:.45rem .2rem; color:var(--green); background:transparent; border:0; font-size:.7rem; font-weight:750; text-decoration:underline; text-underline-offset:3px; }
 
 .quick-template-management-item .small-action { min-height:36px; padding:.4rem .62rem; font-size:.65rem; white-space:nowrap; }
 

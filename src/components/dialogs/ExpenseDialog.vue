@@ -60,7 +60,6 @@ const {
   addDraftTag,
   saveExpense,
   confirmExpense,
-  navigateTo,
 } = useGastotecaContext()
 const activeQuickExpenseTemplates = computed(() => quickExpenseTemplates.value
   .map((template, index) => ({ template, index, order: template.sort_order === undefined ? index : Number(template.sort_order) }))
@@ -333,8 +332,8 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
         </footer>
       </section>
       <form :aria-busy="saving" v-else @submit.prevent="saveExpense">
-        <fieldset v-if="!draft.id && !draft.transaction_type" class="transaction-type">
-          <legend>Primero, selecciona el tipo *</legend><div class="choice-grid transaction-options">
+        <fieldset v-if="!draft.id && !draft.transaction_type" class="transaction-type" aria-label="Tipo de movimiento">
+          <div class="choice-grid transaction-options">
             <label :class="{ selected: draft.transaction_type === 'expense' }">
               <input v-model="draft.transaction_type"
                      type="radio" name="draft-transaction_type"
@@ -347,17 +346,16 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
                      value="income"
                      required
               /><PhArrowUp aria-hidden="true" :size="22" /><span><strong>Ingreso</strong><small>Dinero que ha entrado</small></span>
-            </label><p class="quick-expense-section-label quick-expense-pending-label">Gasto puntual · sin plantilla</p><button type="button" class="quick-expense-choice quick-expense-pending" @click="startQuickExpense">
-              <PhLightning aria-hidden="true" :size="22" weight="fill" /><span><strong>Guardar solo el importe</strong><small>Completarás los datos del gasto después</small></span>
+            </label><button type="button" class="quick-expense-choice" @click="startQuickExpense">
+              <PhLightning aria-hidden="true" :size="22" weight="fill" /><span><strong>Gasto rápido</strong></span>
             </button>
-            <p class="quick-expense-section-label saved-quick-expenses-label">Plantillas guardadas · reutilizables</p>
-            <p v-if="!activeQuickExpenseTemplates.length" class="quick-template-empty-hint">{{ quickExpenseTemplates.length ? 'No hay plantillas activas. Puedes volver a activarlas desde Gestionar plantillas.' : 'Puedes crear tus plantillas desde Gestionar plantillas.' }}</p>
+            <p class="quick-expense-section-label saved-quick-expenses-label">Plantillas</p>
+            <p v-if="!activeQuickExpenseTemplates.length" class="quick-template-empty-hint">{{ quickExpenseTemplates.length ? 'No hay plantillas activas.' : 'Aún no tienes plantillas.' }}</p>
             <div v-else class="saved-quick-expenses-grid">
               <button v-for="template in activeQuickExpenseTemplates" :key="`${template.created_by || user?.uid}:${template.id}`" type="button" class="quick-expense-choice saved-quick-expense" :title="`${template.title} · ${quickTemplateHint(template)}`" :disabled="saving" @click="applyQuickExpenseTemplate(template)">
                 <iconify-icon aria-hidden="true" :icon="template.icon || 'mdi:lightning-bolt-outline'"></iconify-icon><span class="saved-quick-expense-copy"><strong class="saved-quick-expense-name">{{ template.title }}</strong><span v-if="template.fields?.includes('amount') && Number(template.amount) > 0" class="saved-quick-expense-amount">{{ money(template.amount) }}</span></span>
               </button>
             </div>
-            <button type="button" class="quick-template-manage" :disabled="saving" @click="closeExpenseModal(); navigateTo('/gastos-rapidos')">Gestionar plantillas</button>
           </div>
         </fieldset>
         <template v-if="draft.transaction_type">
