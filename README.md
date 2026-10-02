@@ -29,6 +29,8 @@ El controlador principal está en `/Applications/MAMP/htdocs/OV2/api/mistergasto
 - `GET /gastoteca/telegram_settings` y `POST /gastoteca/save_telegram_settings`: consultan y guardan los tipos de aviso por Telegram.
 - `GET /gastoteca/backup_settings` y `POST /gastoteca/save_backup_settings`: consultan y guardan la programación de copias de la cuenta para el grupo actual (`frequency`: `disabled`, `daily`, `weekly` o `monthly`; `time`: `HH:mm`; `weekday`: 1–7; `monthday`: 1–31).
 - `POST /gastoteca/send_backup`: envía el historial completo en CSV al Telegram de la cuenta autenticada. Devuelve el nombre del archivo, el número de movimientos y liquidaciones y la fecha de envío.
+- `GET /gastoteca/summary_settings` y `POST /gastoteca/save_summary_settings`: consultan y guardan resúmenes diarios, semanales y mensuales independientes. El cuerpo contiene `schedules.daily`, `schedules.weekly` y `schedules.monthly`, cada uno con `enabled`, `time`, `weekday` y `monthday`.
+- `POST /gastoteca/send_summary`: envía un resumen del periodo completo anterior; acepta `period`: `daily`, `weekly` o `monthly`.
 - `POST /gastoteca/save_catalog_icons`: guarda los iconos Iconify del grupo para establecimientos y categorías.
 - `POST /gastoteca/save_catalog_item`: crea o renombra un establecimiento o categoría y guarda su icono.
 - `GET /gastoteca/quick_expense_templates`: devuelve las plantillas propias y las compartidas por miembros del grupo, con `visibility` (`private` o `group`), `created_by` y `can_edit`.
@@ -47,9 +49,17 @@ En Ajustes, «Copias de seguridad» permite enviar una copia ahora o guardar una
 
 Cada archivo contiene todos los ingresos y gastos visibles para esa cuenta, incluidos sus propios movimientos pendientes de confirmación, y las liquidaciones del grupo. Los pendientes de otros autores conservan su privacidad. El CSV utiliza UTF-8 con BOM, separador `;`, importes con dos decimales y columnas de identificación, fecha, detalle, categoría, establecimiento, ciudad, pago, autoría y confirmación. Los repartos y etiquetas están en columnas JSON para conservar sus valores; el texto que podría interpretarse como una fórmula se protege al abrirlo en una hoja de cálculo. El archivo temporal se elimina tanto si el envío funciona como si falla. El transporte utiliza [sendDocument de Telegram](https://core.telegram.org/bots/api#senddocument) y admite archivos de hasta 50 MB.
 
-El backend está en `api/GastotecaBackups.php`, incorporado por `api/mistergastos.php`; la migración automática de esquema 11 crea `mg_backup_preferences`. Para producción hay que desplegar ambos archivos, `api/telegram.php` y, si se usa el ejecutor independiente, `api/cron/gastoteca_backups.php`.
+El backend está en `api/GastotecaBackups.php` y `api/GastotecaSummaries.php`, incorporados por `api/mistergastos.php`; la migración automática de esquema 12 conserva las copias y añade `mg_summary_preferences`. Para producción hay que desplegar estos tres archivos, `api/telegram.php` y, si se usa el ejecutor independiente, `api/cron/gastoteca_backups.php`.
 
 El cron existente `GET /telegram/run_scheduled_alerts` y el script `cron/menudiario_telegram.php` también ejecutan las copias. La vía HTTP de copias exige el encabezado `X-MenuDiario-Cron-Secret` con el secreto del servidor. Si ya está configurado el cron de Menu Diario con ese encabezado, no hace falta otra tarea. Como alternativa se puede ejecutar cada 10 minutos `GET /gastoteca/run_scheduled_backups` con el mismo encabezado o `php /ruta/api/cron/gastoteca_backups.php`. El envío ocurre en la primera ejecución posterior a la hora elegida, aunque la app esté cerrada. Después de un periodo sin cron se envía una única copia actual; los errores mantienen el envío pendiente para reintentarlo. Los bloqueos de MySQL evitan ejecuciones simultáneas de la misma cuenta y grupo.
+
+## Resúmenes de gastos por Telegram
+
+En Ajustes se pueden activar a la vez los resúmenes diarios, semanales y mensuales, con hora y día independientes, o enviar uno manualmente. Usan el mismo cron de las copias, incluso si las copias CSV están desactivadas: no hay que añadir ninguna tarea al servidor. La respuesta del cron incorpora `summaries` con el número de resúmenes revisados, enviados y fallidos. Se usa la conexión personal de Telegram; desactivar los avisos de actividad no desactiva los resúmenes.
+
+Los mensajes resumen el último periodo completo según Europe/Madrid: el día anterior, la semana anterior de lunes a domingo o el mes anterior. Incluyen gastos del grupo, número de movimientos, media diaria, parte del reparto que corresponde al destinatario, ingresos, ingresos menos gastos, comparación de gastos con el periodo previo y cinco categorías principales más el resto. Solo cuentan movimientos confirmados; los pendientes y las liquidaciones entre miembros no se suman como gastos. Un periodo sin gastos se indica expresamente.
+
+Las programaciones pertenecen a la cuenta y al grupo y se eliminan al abandonar el grupo. Se guardan juntas en una transacción. Los envíos manuales y guardar una programación sin modificarla conservan los envíos pendientes. El cron evita ejecuciones simultáneas y reintenta los fallos; tras una interrupción envía una vez el último periodo completo disponible, sin acumular mensajes de todos los periodos omitidos.
 
 ## Despliegue en GitHub Pages
 
@@ -87,6 +97,7 @@ La visibilidad y la autoría de las plantillas se prueban también contra el con
 php tests/quick-template-api.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
 php tests/backups-api.test.php /Applications/MAMP/htdocs/OV2/api/GastotecaBackups.php
 php tests/backup-controller.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
+php tests/summaries-api.test.php /Applications/MAMP/htdocs/OV2/api/GastotecaBackups.php
 ```
 
 Las pruebas usan el ejecutor de Node y Vite para cargar componentes Vue, sin dependencias de pruebas adicionales. Cubren balances y liquidaciones, sugerencias, aislamiento del estado, reparto, contratos de guardado y borrado, errores de API y renderizado de las diez rutas y los diálogos. Las peticiones de las pruebas de operaciones están simuladas: no requieren Firebase ni modifican datos reales. El workflow ejecuta las pruebas antes de generar la build.

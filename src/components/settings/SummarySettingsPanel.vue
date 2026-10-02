@@ -42,8 +42,8 @@ const change = (period, field, value) => emit('update-schedule', { period, field
       <fieldset v-for="option in options" :key="option.value" class="summary-schedule" :disabled="saving || Boolean(sending)">
         <legend class="sr-only">Resumen {{ option.label.toLowerCase() }}</legend>
         <label class="summary-toggle" :for="`summary-${option.value}-enabled`">
-          <input :id="`summary-${option.value}-enabled`" type="checkbox" :checked="schedules[option.value].enabled" :disabled="!connected && !schedules[option.value].enabled" @change="change(option.value, 'enabled', $event.target.checked)" />
-          <span><strong>Resumen {{ option.label.toLowerCase() }}</strong><small>{{ option.description }}</small></span>
+          <input :id="`summary-${option.value}-enabled`" type="checkbox" :aria-labelledby="`summary-${option.value}-label`" :aria-describedby="`summary-${option.value}-description`" :checked="schedules[option.value].enabled" :disabled="!connected && !schedules[option.value].enabled" @change="change(option.value, 'enabled', $event.target.checked)" />
+          <span><strong :id="`summary-${option.value}-label`">Resumen {{ option.label.toLowerCase() }}</strong><small :id="`summary-${option.value}-description`">{{ option.description }}</small></span>
         </label>
         <div v-if="schedules[option.value].enabled" class="settings-backup-fields">
           <label :for="`summary-${option.value}-time`">

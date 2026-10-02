@@ -29,8 +29,13 @@ class MenuDiarioTelegram
     public static $enabled = true;
     public static $fail = false;
     public static $deliveries = array();
+    public static $messages = array();
     public static function configured() { return self::$enabled; }
     public static function cronSecret() { return 'test-secret'; }
+    public static function sendMessage($chatId, $text) {
+        self::$messages[] = array('chat_id' => $chatId, 'text' => $text);
+        return self::$fail ? null : array('message_id' => 1);
+    }
     public static function sendDocument($chatId, $path, $filename, $caption) {
         self::$deliveries[] = array('chat_id' => $chatId, 'path' => $path, 'filename' => $filename, 'csv' => file_get_contents($path), 'caption' => $caption);
         return self::$fail ? null : array('message_id' => 1);
@@ -41,7 +46,7 @@ class BackupStatement { public function close() {} }
 
 class BackupTestApi
 {
-    use GastotecaBackups;
+    use GastotecaBackups, GastotecaSummaries;
     private $databaseName = 'test';
     public $identity = array('claims' => array('uid' => 'alice'));
     public $settings = array();
@@ -79,7 +84,8 @@ class BackupTestApi
         check($groupId === 1, 'Settlements scoped to authenticated group');
         return $this->includeExpense ? array(array('id' => 9, 'payer_uid' => 'bob', 'payee_uid' => 'alice', 'amount' => 8.30, 'payment_method' => 'bizum', 'paid_at' => '2026-10-01 12:00:00', 'created_by' => 'bob')) : array();
     }
-    private function query($sql, $types = '', $values = array()) {
+    protected function query($sql, $types = '', $values = array()) {
+        if (strpos($sql, 'SELECT p.group_id,p.uid,p.period FROM mg_summary_preferences') === 0) return array();
         if (strpos($sql, 'SELECT GET_LOCK') === 0) {
             if ($this->locked) return array(array('acquired' => 0));
             $this->locked = true;
@@ -96,7 +102,7 @@ class BackupTestApi
         }
         throw new RuntimeException('Unexpected query: ' . $sql);
     }
-    private function prepare($sql, $types, $values) {
+    protected function prepare($sql, $types, $values) {
         if (strpos($sql, 'INSERT INTO mg_backup_preferences (group_id,uid,frequency') === 0) {
             $this->settings = array_merge($this->settings, array('frequency' => $values[2], 'send_time' => $values[3], 'weekday' => $values[4], 'monthday' => $values[5], 'next_run_at' => $values[6]));
         } elseif (strpos($sql, 'INSERT INTO mg_backup_preferences (group_id,uid,last_sent_at') === 0) {

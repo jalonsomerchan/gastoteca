@@ -220,6 +220,22 @@ CREATE TABLE IF NOT EXISTS mg_backup_preferences (
   CONSTRAINT fk_mg_backup_member FOREIGN KEY (group_id, uid) REFERENCES mg_group_members(group_id, uid) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS mg_summary_preferences (
+  group_id BIGINT UNSIGNED NOT NULL,
+  uid VARCHAR(128) NOT NULL,
+  period ENUM('daily','weekly','monthly') NOT NULL,
+  enabled TINYINT(1) NOT NULL DEFAULT 0,
+  send_time TIME NOT NULL DEFAULT '09:00:00',
+  weekday TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  monthday TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  next_run_at DATETIME NULL,
+  last_sent_at DATETIME NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (group_id, uid, period),
+  KEY idx_mg_summary_due (enabled, next_run_at),
+  CONSTRAINT fk_mg_summary_member FOREIGN KEY (group_id, uid) REFERENCES mg_group_members(group_id, uid) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS mg_telegram_preferences (
   group_id BIGINT UNSIGNED NOT NULL,
   uid VARCHAR(128) NOT NULL,

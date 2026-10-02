@@ -19,6 +19,7 @@ const { useTags } = await server.ssrLoadModule('/src/composables/useTags.js')
 const { useBudgets } = await server.ssrLoadModule('/src/composables/useBudgets.js')
 const { useRecurring } = await server.ssrLoadModule('/src/composables/useRecurring.js')
 const { useBackups } = await server.ssrLoadModule('/src/composables/useBackups.js')
+const { useSummaries } = await server.ssrLoadModule('/src/composables/useSummaries.js')
 
 const alice = { uid: 'alice', name: 'Alicia', email: 'alice@example.test' }
 const bob = { uid: 'bob', name: 'Roberto', email: 'bob@example.test' }
@@ -96,6 +97,8 @@ test('application state and editable drafts are isolated between instances', () 
   first.backupStatus.last_sent_at = '2026-10-02T08:00:00Z'
   assert.equal(second.backupDraft.frequency, 'disabled')
   assert.equal(second.backupStatus.last_sent_at, null)
+  first.summaryDraft.weekly.enabled = true
+  assert.equal(second.summaryDraft.weekly.enabled, false)
 })
 
 test('backup settings send the schedule and apply persisted dates', async t => {
@@ -175,6 +178,91 @@ test('settings exposes manual backups, schedule fields and saved delivery dates'
   assert.match(html, /datetime="2026-10-31T08:00:00Z"/)
   const disconnected = await renderComponent('/src/views/SettingsView.vue', 'settings')
   assert.match(disconnected, /disabled[^>]*>[\s\S]*?Enviar copia ahora/)
+})
+
+test('summary settings save multiple schedules and restore saved dates', async t => {
+  const state = createGastotecaState()
+  const summaries = useSummaries({ ...state, freshToken: async () => 'summary-token', flash: () => {} })
+  Object.assign(state.summaryDraft.weekly, { enabled: true, time: '10:30', weekday: 2 })
+  Object.assign(state.summaryDraft.monthly, { enabled: true, monthday: 31 })
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.match(url, /gastoteca\/save_summary_settings$/)
+    assert.equal(options.headers.Authorization, 'Bearer summary-token')
+    const { schedules } = JSON.parse(options.body)
+    assert.equal(schedules.weekly.enabled, true)
+    assert.equal(schedules.monthly.enabled, true)
+    assert.equal(schedules.daily.enabled, false)
+    return { ok: true, json: async () => ({ data: { schedules: { ...schedules,
+      weekly: { ...schedules.weekly, next_run_at: '2026-10-06T08:30:00Z' },
+      monthly: { ...schedules.monthly, next_run_at: '2026-10-31T08:00:00Z' },
+    } } }) }
+  })
+  await summaries.saveSummarySettings()
+  assert.equal(state.summaryStatus.weekly.next_run_at, '2026-10-06T08:30:00Z')
+  assert.equal(state.summaryStatus.monthly.next_run_at, '2026-10-31T08:00:00Z')
+  assert.equal(state.summarySaving.value, false)
+  summaries.applySummarySettings()
+  assert.equal(state.summaryDraft.weekly.enabled, false)
+  assert.equal(state.summaryStatus.weekly.next_run_at, null)
+})
+
+test('manual summary sends the selected period once without altering schedule drafts', async t => {
+  const state = createGastotecaState()
+  const summaries = useSummaries({ ...state, freshToken: async () => 'token', flash: () => {} })
+  state.summaryPeriod.value = 'monthly'
+  state.summaryDraft.monthly.enabled = true
+  state.summaryStatus.monthly.next_run_at = '2026-10-31T08:00:00Z'
+  let finishRequest
+  const response = new Promise(resolve => { finishRequest = resolve })
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.match(url, /gastoteca\/send_summary$/)
+    assert.deepEqual(JSON.parse(options.body), { period: 'monthly' })
+    return response
+  })
+  const sending = summaries.sendSummaryNow()
+  assert.equal(state.summarySending.value, 'monthly')
+  await summaries.sendSummaryNow()
+  await summaries.saveSummarySettings()
+  state.summaryPeriod.value = 'weekly'
+  finishRequest({ ok: true, json: async () => ({ data: { period: 'monthly', last_sent_at: '2026-10-02T08:00:00Z' } }) })
+  await sending
+  assert.equal(fetchMock.mock.callCount(), 1)
+  assert.equal(state.summarySending.value, '')
+  assert.equal(state.summaryStatus.monthly.last_sent_at, '2026-10-02T08:00:00Z')
+  assert.equal(state.summaryStatus.weekly.last_sent_at, null)
+  assert.equal(state.summaryStatus.monthly.next_run_at, '2026-10-31T08:00:00Z')
+  assert.equal(state.summaryDraft.monthly.enabled, true)
+})
+
+test('summary failures retain drafts and previous delivery dates', async t => {
+  const state = createGastotecaState()
+  const summaries = useSummaries({ ...state, freshToken: async () => 'token', flash: () => assert.fail('Unexpected success') })
+  state.summaryDraft.weekly.enabled = true
+  state.summaryStatus.weekly.last_sent_at = '2026-09-28T07:00:00Z'
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 502, json: async () => ({ message: 'No se pudo enviar el resumen.' }) }))
+  await summaries.saveSummarySettings()
+  await summaries.sendSummaryNow()
+  assert.equal(state.error.value, 'No se pudo enviar el resumen.')
+  assert.equal(state.summarySaving.value, false)
+  assert.equal(state.summarySending.value, '')
+  assert.equal(state.summaryDraft.weekly.enabled, true)
+  assert.equal(state.summaryStatus.weekly.last_sent_at, '2026-09-28T07:00:00Z')
+})
+
+test('settings render simultaneous weekly and monthly summaries with labelled schedules', async () => {
+  const html = await renderComponent('/src/views/SettingsView.vue', 'settings', app => {
+    app.telegramConnected.value = true
+    app.summaryDraft.weekly.enabled = true
+    app.summaryDraft.monthly.enabled = true
+    app.summaryStatus.weekly.next_run_at = '2026-10-05T07:00:00Z'
+  })
+  assert.match(html, /Resúmenes de gastos/)
+  assert.match(html, /Enviar resumen ahora/)
+  assert.match(html, /for="summary-weekly-weekday"/)
+  assert.match(html, /for="summary-monthly-monthday"/)
+  assert.match(html, /datetime="2026-10-05T07:00:00Z"/)
+  assert.match(html, /semana anterior, de lunes a domingo/)
+  assert.match(html, /mes anterior completo/)
 })
 
 const views = { expenses: 'Expenses', 'quick-expenses': 'QuickExpenses', 'bulk-edit': 'BulkEdit', import: 'Import', balance: 'Balance', stats: 'Statistics', budgets: 'Budgets', recurring: 'Recurring', tags: 'Tags', establishments: 'Catalog', categories: 'Catalog', group: 'Group', settings: 'Settings' }
