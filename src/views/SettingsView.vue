@@ -1,6 +1,6 @@
 <script setup>
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
-import { PhCheck, PhArrowRight, PhUsers } from '@phosphor-icons/vue'
+import { PhCheck, PhArrowRight, PhUsers, PhCloudArrowUp } from '@phosphor-icons/vue'
 
 const {
   user,
@@ -14,6 +14,12 @@ const {
   telegramSaving,
   telegramTesting,
   notificationSaving,
+  backupDraft,
+  backupStatus,
+  backupSaving,
+  backupSending,
+  saveBackupSettings,
+  sendBackupNow,
   notificationOptions,
   memberOptions,
   saveTelegramSettings,
@@ -23,6 +29,11 @@ const {
   refreshTelegramStatus,
   navigateTo,
 } = useGastotecaContext()
+
+const weekdays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+const backupDate = value => new Intl.DateTimeFormat('es-ES', {
+  day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid',
+}).format(new Date(value))
 </script>
 
 <template>
@@ -30,7 +41,7 @@ const {
     <div>
       <p class="eyebrow">
         TU EXPERIENCIA
-      </p><h1>Ajustes</h1><p>Elige qué avisos quieres recibir y cómo te llegan.</p>
+      </p><h1>Ajustes</h1><p>Elige tus avisos y guarda copias de tus movimientos.</p>
     </div>
   </section>
   <section class="settings-layout">
@@ -122,6 +133,68 @@ const {
           </button>
         </div>
       </template>
+    </form>
+
+    <form class="feature-panel feature-form settings-backup-panel" aria-label="Copias de seguridad" :aria-busy="backupSaving || backupSending" @submit.prevent="saveBackupSettings">
+      <div class="feature-panel-heading">
+        <div>
+          <p class="eyebrow">TUS DATOS A SALVO</p><h2>Copias de seguridad</h2>
+        </div><PhCloudArrowUp aria-hidden="true" :size="26" />
+      </div>
+      <p class="feature-hint settings-intro">
+        Recibe en tu Telegram un CSV con todos los ingresos y gastos de tu grupo, sus repartos, etiquetas y liquidaciones. Cada copia contiene todo el historial, sin filtros. La programación solo afecta a tu cuenta y a este grupo.
+      </p>
+      <p v-if="!telegramConnected" class="feature-hint">
+        {{ telegramConfigured ? 'Conecta tu cuenta en la sección Telegram para recibir copias.' : 'Telegram debe estar configurado en el servidor para enviar copias.' }}
+      </p>
+      <div class="settings-backup-manual">
+        <button type="button" class="secondary" :disabled="!telegramConnected || backupSending || backupSaving" @click="sendBackupNow">
+          <PhCloudArrowUp aria-hidden="true" :size="18" /> {{ backupSending ? 'Enviando copia…' : 'Enviar copia ahora' }}
+        </button>
+        <p v-if="backupStatus.last_sent_at" class="feature-hint">
+          Última copia enviada: <time :datetime="backupStatus.last_sent_at">{{ backupDate(backupStatus.last_sent_at) }}</time>
+        </p>
+      </div>
+      <fieldset class="settings-backup-fields" :disabled="backupSaving || backupSending">
+        <legend class="sr-only">Programación de copias automáticas</legend>
+        <label for="backup-frequency">
+          <span>Copias automáticas</span>
+          <select id="backup-frequency" v-model="backupDraft.frequency" :disabled="!telegramConnected && backupDraft.frequency === 'disabled'">
+            <option value="disabled">Desactivadas</option>
+            <option value="daily">Cada día</option>
+            <option value="weekly">Cada semana</option>
+            <option value="monthly">Cada mes</option>
+          </select>
+        </label>
+        <label v-if="backupDraft.frequency !== 'disabled'" for="backup-time">
+          <span>Hora de envío · Madrid</span>
+          <input id="backup-time" v-model="backupDraft.time" type="time" required />
+        </label>
+        <label v-if="backupDraft.frequency === 'weekly'" for="backup-weekday">
+          <span>Día de la semana</span>
+          <select id="backup-weekday" v-model.number="backupDraft.weekday">
+            <option v-for="(day, index) in weekdays" :key="day" :value="index + 1">{{ day }}</option>
+          </select>
+        </label>
+        <label v-if="backupDraft.frequency === 'monthly'" for="backup-monthday">
+          <span>Día del mes</span>
+          <select id="backup-monthday" v-model.number="backupDraft.monthday" aria-describedby="backup-monthday-hint">
+            <option v-for="day in 31" :key="day" :value="day">{{ day }}</option>
+          </select>
+        </label>
+      </fieldset>
+      <p v-if="backupDraft.frequency === 'monthly'" id="backup-monthday-hint" class="feature-hint">
+        Si el mes no tiene ese día, se enviará el último día del mes.
+      </p>
+      <p class="feature-hint">Las copias automáticas se envían aunque tengas la aplicación cerrada. Horario de Europe/Madrid.</p>
+      <p v-if="backupStatus.next_run_at" class="feature-hint">
+        Próximo envío guardado: <time :datetime="backupStatus.next_run_at">{{ backupDate(backupStatus.next_run_at) }}</time>
+      </p>
+      <div class="feature-form-actions">
+        <span></span><button class="primary" :disabled="backupSaving || backupSending || (!telegramConnected && backupDraft.frequency !== 'disabled')">
+          <PhCheck aria-hidden="true" :size="17" /> {{ backupSaving ? 'Guardando…' : 'Guardar programación' }}
+        </button>
+      </div>
     </form>
 
     <article class="feature-panel settings-account-panel">

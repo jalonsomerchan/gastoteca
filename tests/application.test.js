@@ -18,6 +18,7 @@ const { useDataEditor } = await server.ssrLoadModule('/src/composables/useDataEd
 const { useTags } = await server.ssrLoadModule('/src/composables/useTags.js')
 const { useBudgets } = await server.ssrLoadModule('/src/composables/useBudgets.js')
 const { useRecurring } = await server.ssrLoadModule('/src/composables/useRecurring.js')
+const { useBackups } = await server.ssrLoadModule('/src/composables/useBackups.js')
 
 const alice = { uid: 'alice', name: 'Alicia', email: 'alice@example.test' }
 const bob = { uid: 'bob', name: 'Roberto', email: 'bob@example.test' }
@@ -91,6 +92,89 @@ test('application state and editable drafts are isolated between instances', () 
   first.expenses.value.push(expense)
   assert.deepEqual(second.draft.tags, [])
   assert.deepEqual(second.expenses.value, [])
+  first.backupDraft.frequency = 'daily'
+  first.backupStatus.last_sent_at = '2026-10-02T08:00:00Z'
+  assert.equal(second.backupDraft.frequency, 'disabled')
+  assert.equal(second.backupStatus.last_sent_at, null)
+})
+
+test('backup settings send the schedule and apply persisted dates', async t => {
+  const state = createGastotecaState()
+  const notices = []
+  const backups = useBackups({ ...state, freshToken: async () => 'backup-token', flash: value => notices.push(value) })
+  Object.assign(state.backupDraft, { frequency: 'monthly', time: '20:30', weekday: 5, monthday: 31 })
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.match(url, /gastoteca\/save_backup_settings$/)
+    assert.equal(options.headers.Authorization, 'Bearer backup-token')
+    assert.deepEqual(JSON.parse(options.body), { frequency: 'monthly', time: '20:30', weekday: 5, monthday: 31 })
+    return { ok: true, json: async () => ({ data: { ...state.backupDraft, next_run_at: '2026-10-31T19:30:00Z', last_sent_at: null } }) }
+  })
+  await backups.saveBackupSettings()
+  assert.equal(state.backupStatus.next_run_at, '2026-10-31T19:30:00Z')
+  assert.equal(state.backupSaving.value, false)
+  assert.equal(notices.length, 1)
+  backups.applyBackupSettings()
+  assert.equal(state.backupDraft.frequency, 'disabled')
+  assert.equal(state.backupStatus.next_run_at, null)
+})
+
+test('manual backup prevents duplicate sends and preserves an unsaved schedule', async t => {
+  const state = createGastotecaState()
+  const notices = []
+  const backups = useBackups({ ...state, freshToken: async () => 'token', flash: value => notices.push(value) })
+  state.backupDraft.frequency = 'weekly'
+  state.backupStatus.next_run_at = '2026-10-05T07:00:00Z'
+  let finishRequest
+  const response = new Promise(resolve => { finishRequest = resolve })
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.match(url, /gastoteca\/send_backup$/)
+    assert.deepEqual(JSON.parse(options.body), {})
+    return response
+  })
+  const sending = backups.sendBackupNow()
+  assert.equal(state.backupSending.value, true)
+  await backups.sendBackupNow()
+  await backups.saveBackupSettings()
+  finishRequest({ ok: true, json: async () => ({ data: { last_sent_at: '2026-10-02T08:00:00Z', movement_count: 150, settlement_count: 2 } }) })
+  await sending
+  assert.equal(fetchMock.mock.callCount(), 1)
+  assert.equal(state.backupSending.value, false)
+  assert.equal(state.backupStatus.last_sent_at, '2026-10-02T08:00:00Z')
+  assert.equal(state.backupDraft.frequency, 'weekly')
+  assert.equal(state.backupStatus.next_run_at, '2026-10-05T07:00:00Z')
+  assert.match(notices[0], /150 movimientos y 2 liquidaciones/)
+})
+
+test('backup failure retains the draft and does not claim a successful delivery', async t => {
+  const state = createGastotecaState()
+  const backups = useBackups({ ...state, freshToken: async () => 'token', flash: () => assert.fail('No success notice expected') })
+  state.backupDraft.frequency = 'daily'
+  state.backupStatus.last_sent_at = '2026-10-01T07:00:00Z'
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 502, json: async () => ({ message: 'Telegram desconectado.' }) }))
+  await backups.saveBackupSettings()
+  await backups.sendBackupNow()
+  assert.equal(state.error.value, 'Telegram desconectado.')
+  assert.equal(state.backupSaving.value, false)
+  assert.equal(state.backupSending.value, false)
+  assert.equal(state.backupDraft.frequency, 'daily')
+  assert.equal(state.backupStatus.last_sent_at, '2026-10-01T07:00:00Z')
+})
+
+test('settings exposes manual backups, schedule fields and saved delivery dates', async () => {
+  const connected = app => {
+    app.telegramConfigured.value = true
+    app.telegramConnected.value = true
+    app.backupDraft.frequency = 'monthly'
+    app.backupStatus.next_run_at = '2026-10-31T08:00:00Z'
+  }
+  const html = await renderComponent('/src/views/SettingsView.vue', 'settings', connected)
+  assert.match(html, /Enviar copia ahora/)
+  assert.match(html, /for="backup-time"/)
+  assert.match(html, /for="backup-monthday"/)
+  assert.match(html, /último día del mes/)
+  assert.match(html, /datetime="2026-10-31T08:00:00Z"/)
+  const disconnected = await renderComponent('/src/views/SettingsView.vue', 'settings')
+  assert.match(disconnected, /disabled[^>]*>[\s\S]*?Enviar copia ahora/)
 })
 
 const views = { expenses: 'Expenses', 'quick-expenses': 'QuickExpenses', 'bulk-edit': 'BulkEdit', import: 'Import', balance: 'Balance', stats: 'Statistics', budgets: 'Budgets', recurring: 'Recurring', tags: 'Tags', establishments: 'Catalog', categories: 'Catalog', group: 'Group', settings: 'Settings' }

@@ -13,6 +13,15 @@
 .settings-status { padding:.34rem .55rem; color:#876642; background:#fff4de; border-radius:99px; font-size:.59rem; font-weight:800; white-space:nowrap; }
 .settings-status.connected { color:var(--green); background:var(--soft); }
 .settings-account-panel { grid-column:1/-1; }
+.settings-backup-panel { grid-column:1/-1; min-width:0; }
+.settings-backup-panel>.feature-panel-heading>svg { flex:0 0 auto; color:var(--green); }
+.settings-backup-manual { display:flex; align-items:center; flex-wrap:wrap; gap:.6rem 1rem; padding:0 0 1rem; margin-bottom:1rem; border-bottom:1px solid var(--line); }
+.settings-backup-manual p { margin:0; }
+.settings-backup-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.8rem; min-width:0; margin:0; padding:0; border:0; }
+.settings-backup-fields label { display:grid; align-content:start; gap:.4rem; min-width:0; }
+.settings-backup-fields label>span { color:var(--muted); font-size:.875rem; font-weight:700; }
+.settings-backup-fields :is(select,input) { width:100%; min-width:0; min-height:44px; padding:.6rem .75rem; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:11px; font:inherit; }
+@media (max-width:580px) { .settings-backup-fields { grid-template-columns:1fr; }.settings-backup-manual button { width:100%; } }
 .settings-account-row { display:flex; align-items:center; gap:.7rem; min-height:60px; padding:.55rem 0; border-top:1px solid #edf0ed; }
 .settings-account-row>div { flex:1; min-width:0; }
 .settings-account-row strong,.settings-account-row small { display:block; overflow:hidden; text-overflow:ellipsis; }

@@ -27,6 +27,8 @@ El controlador principal está en `/Applications/MAMP/htdocs/OV2/api/mistergasto
 - `POST /gastoteca/confirm_expense`: confirma un movimiento recurrente pendiente de su autor y lo publica al grupo.
 - `POST /gastoteca/save_tag` y `POST /gastoteca/delete_tag`: crean, renombran o eliminan etiquetas del grupo.
 - `GET /gastoteca/telegram_settings` y `POST /gastoteca/save_telegram_settings`: consultan y guardan los tipos de aviso por Telegram.
+- `GET /gastoteca/backup_settings` y `POST /gastoteca/save_backup_settings`: consultan y guardan la programación de copias de la cuenta para el grupo actual (`frequency`: `disabled`, `daily`, `weekly` o `monthly`; `time`: `HH:mm`; `weekday`: 1–7; `monthday`: 1–31).
+- `POST /gastoteca/send_backup`: envía el historial completo en CSV al Telegram de la cuenta autenticada. Devuelve el nombre del archivo, el número de movimientos y liquidaciones y la fecha de envío.
 - `POST /gastoteca/save_catalog_icons`: guarda los iconos Iconify del grupo para establecimientos y categorías.
 - `POST /gastoteca/save_catalog_item`: crea o renombra un establecimiento o categoría y guarda su icono.
 - `GET /gastoteca/quick_expense_templates`: devuelve las plantillas propias y las compartidas por miembros del grupo, con `visibility` (`private` o `group`), `created_by` y `can_edit`.
@@ -38,6 +40,16 @@ El controlador principal está en `/Applications/MAMP/htdocs/OV2/api/mistergasto
 La API crea automáticamente la base `mistergastos` y sus tablas `mg_*`. Establecimientos, categorías y ciudades viven en `mg_places`, `mg_categories` y `mg_cities`; `mg_expenses` guarda sus claves foráneas (`place_id`, `category_id`, `city_id`). Etiquetas, liquidaciones, presupuestos, reglas recurrentes y preferencias de Telegram usan tablas propias del grupo. Los movimientos y las liquidaciones registran su método de pago; el propietario puede configurar el predeterminado del grupo. Los movimientos recurrentes vencidos se materializan al consultar Gastoteca; Telegram reutiliza la conexión y el bot configurados para Menu Diario. Al iniciar, la API migra el esquema conservando los movimientos. El esquema reproducible está en `database/mistergastos.sql`.
 
 El servidor de la API envía las invitaciones con PHP `mail()`, por lo que el servidor debe tener un MTA/sendmail operativo. `MISTERGASTOS_MAIL_FROM` permite configurar el remitente; si no se define, se usa `admin@alonsoftware.ga`. La API devuelve un error en vez de marcar como enviada una invitación si el transporte de correo falla.
+
+## Copias por Telegram
+
+En Ajustes, «Copias de seguridad» permite enviar una copia ahora o guardar una programación diaria, semanal o mensual. Se usa la conexión personal de Telegram de Menu Diario; los tipos de aviso seleccionados no afectan a las copias. La programación pertenece a la cuenta y al grupo actual, se elimina al abandonar el grupo y arranca desactivada. Las fechas de envío se almacenan en UTC y se muestran con horario de Madrid. El día 29, 30 o 31 se ajusta al último día de los meses más cortos sin cambiar el día elegido para los meses siguientes.
+
+Cada archivo contiene todos los ingresos y gastos visibles para esa cuenta, incluidos sus propios movimientos pendientes de confirmación, y las liquidaciones del grupo. Los pendientes de otros autores conservan su privacidad. El CSV utiliza UTF-8 con BOM, separador `;`, importes con dos decimales y columnas de identificación, fecha, detalle, categoría, establecimiento, ciudad, pago, autoría y confirmación. Los repartos y etiquetas están en columnas JSON para conservar sus valores; el texto que podría interpretarse como una fórmula se protege al abrirlo en una hoja de cálculo. El archivo temporal se elimina tanto si el envío funciona como si falla. El transporte utiliza [sendDocument de Telegram](https://core.telegram.org/bots/api#senddocument) y admite archivos de hasta 50 MB.
+
+El backend está en `api/GastotecaBackups.php`, incorporado por `api/mistergastos.php`; la migración automática de esquema 11 crea `mg_backup_preferences`. Para producción hay que desplegar ambos archivos, `api/telegram.php` y, si se usa el ejecutor independiente, `api/cron/gastoteca_backups.php`.
+
+El cron existente `GET /telegram/run_scheduled_alerts` y el script `cron/menudiario_telegram.php` también ejecutan las copias. La vía HTTP de copias exige el encabezado `X-MenuDiario-Cron-Secret` con el secreto del servidor. Si ya está configurado el cron de Menu Diario con ese encabezado, no hace falta otra tarea. Como alternativa se puede ejecutar cada 10 minutos `GET /gastoteca/run_scheduled_backups` con el mismo encabezado o `php /ruta/api/cron/gastoteca_backups.php`. El envío ocurre en la primera ejecución posterior a la hora elegida, aunque la app esté cerrada. Después de un periodo sin cron se envía una única copia actual; los errores mantienen el envío pendiente para reintentarlo. Los bloqueos de MySQL evitan ejecuciones simultáneas de la misma cuenta y grupo.
 
 ## Despliegue en GitHub Pages
 
@@ -73,6 +85,8 @@ La visibilidad y la autoría de las plantillas se prueban también contra el con
 
 ```sh
 php tests/quick-template-api.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
+php tests/backups-api.test.php /Applications/MAMP/htdocs/OV2/api/GastotecaBackups.php
+php tests/backup-controller.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
 ```
 
 Las pruebas usan el ejecutor de Node y Vite para cargar componentes Vue, sin dependencias de pruebas adicionales. Cubren balances y liquidaciones, sugerencias, aislamiento del estado, reparto, contratos de guardado y borrado, errores de API y renderizado de las diez rutas y los diálogos. Las peticiones de las pruebas de operaciones están simuladas: no requieren Firebase ni modifican datos reales. El workflow ejecuta las pruebas antes de generar la build.

@@ -83,6 +83,10 @@ export function createGastotecaState() {
   const telegramSaving = ref(false)
   const telegramTesting = ref(false)
   const notificationSaving = ref(false)
+  const backupDraft = reactive({ frequency: 'disabled', time: '09:00', weekday: 1, monthday: 1 })
+  const backupStatus = reactive({ next_run_at: null, last_sent_at: null })
+  const backupSaving = ref(false)
+  const backupSending = ref(false)
   const filters = reactive({ search: '', category: '', from: '', to: '' })
   const filtersOpen = ref(false)
   const visibleExpenseCount = ref(20)
@@ -156,6 +160,10 @@ export function createGastotecaState() {
     telegramSaving,
     telegramTesting,
     notificationSaving,
+    backupDraft,
+    backupStatus,
+    backupSaving,
+    backupSending,
     filters,
     filtersOpen,
     visibleExpenseCount,

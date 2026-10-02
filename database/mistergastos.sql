@@ -205,6 +205,21 @@ CREATE TABLE IF NOT EXISTS mg_recurring_expenses (
   CONSTRAINT fk_mg_recurring_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS mg_backup_preferences (
+  group_id BIGINT UNSIGNED NOT NULL,
+  uid VARCHAR(128) NOT NULL,
+  frequency ENUM('disabled','daily','weekly','monthly') NOT NULL DEFAULT 'disabled',
+  send_time TIME NOT NULL DEFAULT '09:00:00',
+  weekday TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  monthday TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  next_run_at DATETIME NULL,
+  last_sent_at DATETIME NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (group_id, uid),
+  KEY idx_mg_backup_due (frequency, next_run_at),
+  CONSTRAINT fk_mg_backup_member FOREIGN KEY (group_id, uid) REFERENCES mg_group_members(group_id, uid) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS mg_telegram_preferences (
   group_id BIGINT UNSIGNED NOT NULL,
   uid VARCHAR(128) NOT NULL,

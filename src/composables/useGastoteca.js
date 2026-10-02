@@ -18,6 +18,7 @@ import { useBudgets } from './useBudgets.js'
 import { useRecurring } from './useRecurring.js'
 import { useTags } from './useTags.js'
 import { useNotificationSettings } from './useNotificationSettings.js'
+import { useBackups } from './useBackups.js'
 import { useGroup } from './useGroup.js'
 
 // One instance per application. Feature modules receive explicit reactive dependencies.
@@ -76,6 +77,10 @@ export function useGastoteca() {
     telegramSaving,
     telegramTesting,
     notificationSaving,
+    backupDraft,
+    backupStatus,
+    backupSaving,
+    backupSending,
     filters,
     filtersOpen,
     visibleExpenseCount,
@@ -311,6 +316,9 @@ export function useGastoteca() {
     telegramConnected,
     telegramUsername,
   })
+  const { applyBackupSettings, saveBackupSettings, sendBackupNow } = useBackups({
+    backupDraft, backupStatus, backupSaving, backupSending, freshToken, error, flash,
+  })
   const {
     invite,
     saveGroupSettings,
@@ -374,6 +382,7 @@ export function useGastoteca() {
           getJson('gastoteca/telegram_settings', authToken),
           getJson('menudiario/telegram_status', authToken).catch(() => null),
           getJson('gastoteca/notification_settings', authToken),
+          getJson('gastoteca/backup_settings', authToken),
         ]) : Promise.resolve(null)
 
       const requestData = await Promise.all(requests)
@@ -397,6 +406,7 @@ export function useGastoteca() {
         telegramConnected.value = Boolean(featureData[1]?.telegram?.connected)
         telegramUsername.value = featureData[1]?.telegram?.username || featureData[1]?.telegram?.first_name || ''
         appNotificationTypes.value = featureData[2]?.notification_types || notificationOptions.map((item) => item.value)
+        applyBackupSettings(featureData[3])
       }
       await loadNotifications()
     } catch (reason) {
@@ -570,6 +580,7 @@ export function useGastoteca() {
           group.value = null
           notifications.value = []
           unreadNotificationCount.value = 0
+          applyBackupSettings()
           stats.value = { total: 0, count: 0, average: 0, current_month_total: 0, by_category: [], by_member: [], by_participant: [], by_title: [], by_establishment: [], by_payment_method: [], monthly: [] }
         }
         loading.value = false
@@ -638,6 +649,10 @@ export function useGastoteca() {
     telegramSaving,
     telegramTesting,
     notificationSaving,
+    backupDraft,
+    backupStatus,
+    backupSaving,
+    backupSending,
     filters,
     filtersOpen,
     loadMoreSentinel,
@@ -744,6 +759,8 @@ export function useGastoteca() {
     beginTelegramLink,
     refreshTelegramStatus,
     saveExpense,
+    saveBackupSettings,
+    sendBackupNow,
     confirmExpense,
     removeExpense,
     invite,
