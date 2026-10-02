@@ -6,7 +6,7 @@ import BaseDialog from './BaseDialog.vue'
 import { normalizeName } from '../../utils/formatters.js'
 import { syncTypedOption } from '../../utils/selects.js'
 import { useGastotecaContext } from '../../composables/gastotecaContext.js'
-import { PhX, PhClockCounterClockwise, PhCheck, PhArrowDown, PhArrowUp, PhLightning, PhCrosshair, PhArrowRight, PhCaretUpDown, PhTrash, PhPlus } from '@phosphor-icons/vue'
+import { PhX, PhClockCounterClockwise, PhCheck, PhArrowDown, PhArrowUp, PhLightning, PhCrosshair, PhArrowRight, PhCaretUpDown, PhTrash } from '@phosphor-icons/vue'
 import Multiselect from '@vueform/multiselect'
 
 const {
@@ -18,7 +18,6 @@ const {
   quickAmount,
   quickAmountInput,
   quickExpenseTemplates,
-  ownedQuickExpenseTemplates,
   quickTemplateEditorOpen,
   quickTemplatePromptOpen,
   quickTemplateDraft,
@@ -50,7 +49,6 @@ const {
   historyValue,
   startQuickExpense,
   saveQuickExpense,
-  openQuickTemplateEditor,
   saveQuickExpenseTemplate,
   cancelQuickTemplateEditor,
   applyQuickExpenseTemplate,
@@ -353,14 +351,13 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
               <PhLightning aria-hidden="true" :size="22" weight="fill" /><span><strong>Guardar solo el importe</strong><small>Completarás los datos del gasto después</small></span>
             </button>
             <p class="quick-expense-section-label saved-quick-expenses-label">Plantillas guardadas · reutilizables</p>
-            <p v-if="!activeQuickExpenseTemplates.length" class="quick-template-empty-hint">{{ quickExpenseTemplates.length ? 'No hay plantillas activas. Puedes volver a activarlas desde Gestionar plantillas.' : 'Crea una plantilla para añadir gastos frecuentes con un toque.' }}</p>
-            <div v-for="template in activeQuickExpenseTemplates" :key="`${template.created_by || user?.uid}:${template.id}`" class="quick-template-option">
-              <button type="button" class="quick-expense-choice saved-quick-expense" :disabled="saving" @click="applyQuickExpenseTemplate(template)">
-                <iconify-icon aria-hidden="true" :icon="template.icon || 'mdi:lightning-bolt-outline'"></iconify-icon><span><strong>{{ template.title }}</strong><small>{{ quickTemplateHint(template) }} · {{ template.visibility === 'group' ? 'Todo el grupo' : 'Solo para mí' }}</small></span>
+            <p v-if="!activeQuickExpenseTemplates.length" class="quick-template-empty-hint">{{ quickExpenseTemplates.length ? 'No hay plantillas activas. Puedes volver a activarlas desde Gestionar plantillas.' : 'Puedes crear tus plantillas desde Gestionar plantillas.' }}</p>
+            <div v-else class="saved-quick-expenses-grid">
+              <button v-for="template in activeQuickExpenseTemplates" :key="`${template.created_by || user?.uid}:${template.id}`" type="button" class="quick-expense-choice saved-quick-expense" :title="`${template.title} · ${quickTemplateHint(template)}`" :disabled="saving" @click="applyQuickExpenseTemplate(template)">
+                <iconify-icon aria-hidden="true" :icon="template.icon || 'mdi:lightning-bolt-outline'"></iconify-icon><span class="saved-quick-expense-copy"><strong class="saved-quick-expense-name">{{ template.title }}</strong><span v-if="template.fields?.includes('amount') && Number(template.amount) > 0" class="saved-quick-expense-amount">{{ money(template.amount) }}</span></span>
               </button>
             </div>
-            <button type="button" class="quick-template-create" :disabled="saving || ownedQuickExpenseTemplates.length >= 12" @click="openQuickTemplateEditor()"><PhPlus aria-hidden="true" :size="18" /><span><strong>Crear plantilla</strong><small>{{ ownedQuickExpenseTemplates.length >= 12 ? 'Has alcanzado el máximo de 12 propias' : 'Elige qué datos rellenar automáticamente' }}</small></span></button>
-            <button v-if="quickExpenseTemplates.length" type="button" class="quick-template-manage" :disabled="saving" @click="closeExpenseModal(); navigateTo('/gastos-rapidos')">Gestionar plantillas</button>
+            <button type="button" class="quick-template-manage" :disabled="saving" @click="closeExpenseModal(); navigateTo('/gastos-rapidos')">Gestionar plantillas</button>
           </div>
         </fieldset>
         <template v-if="draft.transaction_type">

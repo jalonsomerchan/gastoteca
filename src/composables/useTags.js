@@ -2,11 +2,11 @@ import { postJson } from '../lib/api.js'
 
 export function useTags({ error, tagDraft, saving, freshToken, group, flash, tagDeleteTarget }) {
   async function saveTag() {
-    if (saving.value) return
+    if (saving.value) return false
     error.value = ''
     if (!tagDraft.name.trim()) {
       error.value = 'Escribe un nombre para la etiqueta.'
-      return
+      return false
     }
     saving.value = true
     try {
@@ -15,7 +15,11 @@ export function useTags({ error, tagDraft, saving, freshToken, group, flash, tag
       const wasEditing = Boolean(tagDraft.id)
       Object.assign(tagDraft, { id: '', name: '' })
       flash(wasEditing ? 'Etiqueta actualizada.' : 'Etiqueta creada.')
-    } catch (reason) { error.value = reason.message }
+      return true
+    } catch (reason) {
+      error.value = reason.message
+      return false
+    }
     finally { saving.value = false }
   }
 

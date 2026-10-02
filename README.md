@@ -83,4 +83,8 @@ Las pantallas comparten enlace para saltar al contenido, títulos de documento p
 
 Los formularios incluyen nombres accesibles, grupos de radio identificados, selectores con identificadores únicos y validación de importes y repartos. Hay confirmaciones para borrar presupuestos y cambiar de grupo, acceso manual a más movimientos y tablas alternativas para la evolución mensual.
 
+Establecimientos, categorías, etiquetas, presupuestos y recurrentes se crean y editan en modales. El nombre y el icono de cada elemento del catálogo se guardan juntos; cancelar descarta el borrador y un error conserva el editor abierto. Estas pantallas y gastos rápidos tienen un buscador encima del listado que ignora tildes y mayúsculas, indica el número de resultados y permite limpiar la búsqueda.
+
+La gestión de datos se ha comprobado con 61 pruebas automáticas, lint y build, además de una revisión en el navegador integrado con datos ficticios a 390 y 1280 px de ancho: búsqueda, cancelación, errores, guardado, foco, selector de iconos anidado y ausencia de desbordamiento horizontal.
+
 Verificación de esta mejora: 39 pruebas automáticas, lint y build; comprobación manual en el navegador integrado con datos ficticios a 390 px de ancho de apertura, tabulación, Escape, restauración de foco, confirmación anidada y selectores. Las diez rutas se prueban también mediante renderizado con datos y vacías. No equivale a una certificación WCAG ni a una prueba completa con lector de pantalla.

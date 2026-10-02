@@ -1,9 +1,11 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { PhArrowDown, PhArrowUp, PhLightning, PhPencilSimple, PhPlus } from '@phosphor-icons/vue'
+import { PhArrowDown, PhArrowUp, PhLightning, PhPencilSimple, PhPlus, PhMagnifyingGlass } from '@phosphor-icons/vue'
 import ConfirmDialog from '../components/dialogs/ConfirmDialog.vue'
 import FormError from '../components/forms/FormError.vue'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
+import { useDataSearch } from '../composables/useDataSearch.js'
+import DataSearch from '../components/forms/DataSearch.vue'
 
 const {
   saving,
@@ -12,6 +14,7 @@ const {
   ownedQuickExpenseTemplates,
   canEditQuickExpenseTemplate,
   memberLabel,
+  category,
   openQuickTemplateEditor,
   saveQuickExpenseTemplates,
   deleteQuickExpenseTemplate,
@@ -23,6 +26,9 @@ const orderedTemplates = computed(() => quickExpenseTemplates.value
   .sort((a, b) => Number(canEditQuickExpenseTemplate(b.template)) - Number(canEditQuickExpenseTemplate(a.template)) || a.order - b.order || a.index - b.index)
   .map(item => item.template))
 const activeTemplateCount = computed(() => quickExpenseTemplates.value.filter(template => template.active !== false).length)
+const { search, filteredItems } = useDataSearch(orderedTemplates, template => [
+  template.title, template.name, template.place, template.city, category(template.category).label, templateFields(template),
+].join(' '))
 const fieldLabels = {
   name: 'nombre',
   amount: 'importe',
@@ -40,6 +46,12 @@ const fieldLabels = {
 
 function templateFields(template) {
   return (template.fields || []).map(field => fieldLabels[field] || field).join(' · ')
+}
+
+function canMoveTemplate(template, offset) {
+  const owned = orderedTemplates.value.filter(canEditQuickExpenseTemplate)
+  const index = owned.findIndex(item => item.id === template.id)
+  return index >= 0 && index + offset >= 0 && index + offset < owned.length
 }
 
 async function moveTemplate(template, offset) {
@@ -90,12 +102,13 @@ async function confirmDelete() {
       <span class="feature-count">{{ activeTemplateCount }} activas · {{ ownedQuickExpenseTemplates.length }}/12 propias</span>
     </div>
     <FormError :message="error" />
+    <DataSearch id="quick-template-search" v-model="search" label="Buscar gastos rápidos" placeholder="Buscar por nombre, categoría o lugar…" :count="filteredItems.length" :total="orderedTemplates.length" />
 
-    <div v-if="orderedTemplates.length" class="quick-template-management-list">
-      <article v-for="(template, index) in orderedTemplates" :key="`${template.created_by || 'own'}:${template.id}`" class="quick-template-management-item" :class="{ disabled: template.active === false }">
+    <div v-if="filteredItems.length" class="quick-template-management-list">
+      <article v-for="template in filteredItems" :key="`${template.created_by || 'own'}:${template.id}`" class="quick-template-management-item" :class="{ disabled: template.active === false }">
         <div class="quick-template-reorder" aria-label="Cambiar orden">
-          <button v-if="canEditQuickExpenseTemplate(template)" type="button" class="icon-button" :disabled="saving || index === 0" :aria-label="`Subir ${template.title}`" title="Subir" @click="moveTemplate(template, -1)"><PhArrowUp aria-hidden="true" :size="17" /></button>
-          <button v-if="canEditQuickExpenseTemplate(template)" type="button" class="icon-button" :disabled="saving || index === ownedQuickExpenseTemplates.length - 1" :aria-label="`Bajar ${template.title}`" title="Bajar" @click="moveTemplate(template, 1)"><PhArrowDown aria-hidden="true" :size="17" /></button>
+          <button v-if="canEditQuickExpenseTemplate(template)" type="button" class="icon-button" :disabled="saving || !canMoveTemplate(template, -1)" :aria-label="`Subir ${template.title}`" title="Subir" @click="moveTemplate(template, -1)"><PhArrowUp aria-hidden="true" :size="17" /></button>
+          <button v-if="canEditQuickExpenseTemplate(template)" type="button" class="icon-button" :disabled="saving || !canMoveTemplate(template, 1)" :aria-label="`Bajar ${template.title}`" title="Bajar" @click="moveTemplate(template, 1)"><PhArrowDown aria-hidden="true" :size="17" /></button>
         </div>
         <span class="quick-template-management-icon"><iconify-icon aria-hidden="true" :icon="template.icon || 'mdi:lightning-bolt-outline'"></iconify-icon></span>
         <div class="quick-template-management-copy">
@@ -112,6 +125,12 @@ async function confirmDelete() {
       </article>
     </div>
 
+    <div v-else-if="orderedTemplates.length" class="feature-empty">
+      <PhMagnifyingGlass aria-hidden="true" :size="28" />
+      <strong>No hay resultados para esta búsqueda</strong>
+      <p>Prueba con otro nombre o limpia la búsqueda para ver todas las plantillas.</p>
+      <button type="button" class="secondary" @click="search = ''">Limpiar búsqueda</button>
+    </div>
     <div v-else class="feature-empty quick-template-management-empty">
       <PhLightning aria-hidden="true" :size="29" />
       <strong>Aún no tienes gastos rápidos</strong>

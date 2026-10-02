@@ -3,11 +3,11 @@ import { postJson } from '../lib/api.js'
 
 export function useBudgets({ error, saving, freshToken, budgetDraft, group, flash }) {
   async function saveBudget() {
-    if (saving.value) return
+    if (saving.value) return false
     error.value = ''
     if (!isPositiveAmount(budgetDraft.monthly_limit)) {
       error.value = 'Añade un límite mensual mayor que cero.'
-      return
+      return false
     }
     saving.value = true
     try {
@@ -15,8 +15,10 @@ export function useBudgets({ error, saving, freshToken, budgetDraft, group, flas
       group.value = data.group
       budgetDraft.monthly_limit = ''
       flash('Presupuesto mensual guardado.')
+      return true
     } catch (reason) {
       error.value = reason.message
+      return false
     } finally {
       saving.value = false
     }

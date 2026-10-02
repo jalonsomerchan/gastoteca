@@ -1,12 +1,17 @@
 <script setup>
-import { focusElement } from '../utils/focus.js'
+import { useDataEditor } from '../composables/useDataEditor.js'
+import { useDataSearch } from '../composables/useDataSearch.js'
+import DataEditorDialog from '../components/dialogs/DataEditorDialog.vue'
+import DataSearch from '../components/forms/DataSearch.vue'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
 import { syncTypedOption } from '../utils/selects.js'
-import { PhCheck, PhLightning } from '@phosphor-icons/vue'
+import { PhPlus, PhLightning, PhMagnifyingGlass } from '@phosphor-icons/vue'
 import Multiselect from '@vueform/multiselect'
 
 const {
   saving,
+  error,
+  category,
   group,
   recurringDeleteTarget,
   paymentMethods,
@@ -25,6 +30,10 @@ const {
   setRecurringShareMode,
   saveRecurring,
 } = useGastotecaContext()
+const { search, filteredItems } = useDataSearch(() => group.value?.recurring, rule => [
+  rule.name, rule.payload?.place, rule.payload?.city, category(rule.category).label, ...(rule.payload?.tags || []),
+].join(' '))
+const { editorOpen, openEditor, closeEditor, submitEditor } = useDataEditor({ reset: startRecurringRule, save: saveRecurring })
 </script>
 
 <template>
@@ -34,23 +43,42 @@ const {
         AUTOMATIZACIONES DEL GRUPO
       </p><h1>Gastos recurrentes</h1><p>Configura gastos e ingresos que se añadirán automáticamente cuando llegue su fecha.</p>
     </div>
-    <button v-if="recurringDraft.id"
-            type="button"
-            class="ghost"
-            @click="startRecurringRule()"
-    >
-      Nueva programación
-    </button>
+    <button type="button" class="primary" :disabled="saving" @click="openEditor()"><PhPlus aria-hidden="true" :size="18" /> Nueva programación</button>
   </section>
-  <section class="feature-layout">
-    <form :aria-busy="saving" class="feature-panel feature-form" @submit.prevent="saveRecurring">
-      <div class="feature-panel-heading">
-        <div>
-          <p class="eyebrow">
-            {{ recurringDraft.id ? 'EDITAR PROGRAMACIÓN' : 'NUEVA PROGRAMACIÓN' }}
-          </p><h2>{{ recurringDraft.id ? 'Ajusta los detalles' : 'Añade un movimiento' }}</h2>
+  <section class="feature-panel feature-list-panel">
+    <div class="feature-panel-heading">
+      <div>
+        <p class="eyebrow">
+          PROGRAMACIONES
+        </p><h2>Movimientos automáticos</h2>
+      </div><span class="feature-count">{{ group?.recurring?.length || 0 }}</span>
+    </div>
+    <DataSearch id="recurring-search" v-model="search" label="Buscar programaciones" placeholder="Buscar por nombre, categoría o lugar…" :count="filteredItems.length" :total="group?.recurring?.length || 0" />
+    <div v-if="filteredItems.length" class="feature-list">
+      <article v-for="rule in filteredItems" :key="rule.id" class="feature-list-row">
+        <div class="feature-list-main">
+          <span class="feature-status-dot" :class="{ paused: !rule.active }"></span><div><strong>{{ rule.name }}</strong><small>{{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ money(rule.amount) }} · {{ paymentMethodLabel(rule.payload?.payment_method) }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }}{{ rule.requires_confirmation ? ' · Necesita confirmación' : '' }}</small><small v-if="rule.payload?.place || rule.payload?.city">{{ [rule.payload?.place, rule.payload?.city].filter(Boolean).join(' · ') }}</small><small>{{ rule.active ? 'Próximo: ' : 'Pausado · Próximo: ' }}{{ dateLabel(rule.next_at) }}</small></div>
         </div>
-      </div>
+        <div class="feature-row-actions">
+          <button type="button" class="ghost small-action" :disabled="saving" @click="openEditor(rule)" :aria-label="`Editar programación ${rule.name}`">
+            Editar
+          </button><button type="button" class="secondary small-action" @click="toggleRecurring(rule)" :disabled="saving" :aria-label="`${rule.active ? 'Pausar' : 'Reactivar'} programación ${rule.name}`">
+            {{ rule.active ? 'Pausar' : 'Reactivar' }}
+          </button>
+          <button type="button" class="danger-button small-action" :disabled="saving" :aria-label="`Eliminar programación ${rule.name}`" @click="error = ''; recurringDeleteTarget = rule">Eliminar</button>
+        </div>
+      </article>
+    </div>
+    <div v-else-if="group?.recurring?.length" class="feature-empty">
+      <PhMagnifyingGlass aria-hidden="true" :size="28" /><strong>No hay resultados para esta búsqueda</strong><p>Prueba con otro nombre o limpia la búsqueda.</p>
+      <button type="button" class="secondary" @click="search = ''">Limpiar búsqueda</button>
+    </div>
+    <div v-else class="feature-empty">
+      <PhLightning aria-hidden="true" :size="27" /><strong>Aún no hay programaciones</strong><p>Configura aquí el alquiler, las suscripciones o los ingresos que se repiten.</p>
+      <button type="button" class="secondary" :disabled="saving" @click="openEditor()">Crear programación</button>
+    </div>
+  </section>
+  <DataEditorDialog v-if="editorOpen" title-id="recurring-editor-title" :title="recurringDraft.id ? 'Editar programación' : 'Nueva programación'" save-label="Guardar programación" wide :saving="saving" :error="error" @close="closeEditor" @submit="submitEditor">
       <p class="required-hint">Los campos con * son obligatorios.</p>
       <div class="feature-fields">
         <label><span>Tipo *</span><select v-model="recurringDraft.transaction_type" required>
@@ -60,7 +88,7 @@ const {
           <option value="weekly">Cada semana</option><option value="monthly">Cada mes</option><option value="yearly">Cada año</option>
         </select></label>
         <label class="feature-field-wide">
-          <span>Nombre *</span><input id="recurring-name" v-model="recurringDraft.name"
+          <span>Nombre *</span><input id="recurring-name" data-initial-focus v-model="recurringDraft.name"
                                       maxlength="160"
                                       :placeholder="recurringDraft.transaction_type === 'income' ? 'Nómina o ingreso recurrente' : 'Alquiler, suscripción…'"
                                       required
@@ -91,6 +119,7 @@ const {
           <span id="recurring-place-label">Establecimiento</span><Multiselect id="recurring-place-select" v-model="recurringDraft.place"
                                                    class="smart-select"
                                                    :options="establishmentOptions"
+                                                   :disabled="saving"
                                                    searchable
                                                    create-option
                                                    allow-absent
@@ -105,6 +134,7 @@ const {
           <span id="recurring-city-label">Ciudad</span><Multiselect id="recurring-city-select" v-model="recurringDraft.city"
                                           class="smart-select"
                                           :options="cityOptions"
+                                          :disabled="saving"
                                           searchable
                                           create-option
                                           allow-absent
@@ -176,49 +206,5 @@ const {
           </label>
         </div>
       </fieldset>
-      <div class="feature-form-actions">
-        <button v-if="recurringDraft.id"
-                type="button"
-                class="text-danger"
-                @click="recurringDeleteTarget = { id: recurringDraft.id, name: recurringDraft.name }"
-        >
-          Eliminar programación
-        </button><span></span><button v-if="recurringDraft.id"
-                                      type="button"
-                                      class="ghost"
-                                      @click="startRecurringRule()"
-        >
-          Cancelar
-        </button><button class="primary" :disabled="saving">
-          <PhCheck aria-hidden="true" :size="17" /> {{ saving ? 'Guardando…' : 'Guardar programación' }}
-        </button>
-      </div>
-    </form>
-    <section class="feature-panel feature-list-panel">
-      <div class="feature-panel-heading">
-        <div>
-          <p class="eyebrow">
-            PROGRAMACIONES
-          </p><h2>Movimientos automáticos</h2>
-        </div><span class="feature-count">{{ group?.recurring?.length || 0 }}</span>
-      </div>
-      <div v-if="group?.recurring?.length" class="feature-list">
-        <article v-for="rule in group.recurring" :key="rule.id" class="feature-list-row">
-          <div class="feature-list-main">
-            <span class="feature-status-dot" :class="{ paused: !rule.active }"></span><div><strong>{{ rule.name }}</strong><small>{{ rule.transaction_type === 'income' ? 'Ingreso' : 'Gasto' }} · {{ money(rule.amount) }} · {{ paymentMethodLabel(rule.payload?.payment_method) }} · {{ rule.frequency === 'weekly' ? 'Semanal' : rule.frequency === 'monthly' ? 'Mensual' : 'Anual' }}{{ rule.requires_confirmation ? ' · Necesita confirmación' : '' }}</small><small v-if="rule.payload?.place || rule.payload?.city">{{ [rule.payload?.place, rule.payload?.city].filter(Boolean).join(' · ') }}</small><small>{{ rule.active ? 'Próximo: ' : 'Pausado · Próximo: ' }}{{ dateLabel(rule.next_at) }}</small></div>
-          </div>
-          <div class="feature-row-actions">
-            <button type="button" class="ghost small-action" @click="startRecurringRule(rule); focusElement('#recurring-name')" :aria-label="`Editar programación ${rule.name}`">
-              Editar
-            </button><button type="button" class="secondary small-action" @click="toggleRecurring(rule)" :disabled="saving" :aria-label="`${rule.active ? 'Pausar' : 'Reactivar'} programación ${rule.name}`">
-              {{ rule.active ? 'Pausar' : 'Reactivar' }}
-            </button>
-          </div>
-        </article>
-      </div>
-      <div v-else class="feature-empty">
-        <PhLightning aria-hidden="true" :size="27" /><strong>Aún no hay programaciones</strong><p>Configura aquí el alquiler, las suscripciones o los ingresos que se repiten.</p>
-      </div>
-    </section>
-  </section>
+  </DataEditorDialog>
 </template>

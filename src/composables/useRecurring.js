@@ -91,19 +91,19 @@ export function useRecurring({
   }
 
   async function saveRecurring() {
-    if (saving.value) return
+    if (saving.value) return false
     error.value = ''
     if (!recurringDraft.name.trim() || !isPositiveAmount(recurringDraft.amount)) {
       error.value = 'Añade un nombre y un importe mayor que cero.'
-      return
+      return false
     }
     if (!recurringDraft.applies_to_all && !recurringDraft.participant_uids.length) {
       error.value = 'Selecciona al menos una persona a la que se aplica el movimiento.'
-      return
+      return false
     }
     if (recurringDraft.paid_by_type === 'person' && !memberOptions.value.some(member => member.uid === recurringDraft.paid_by_uid)) {
       error.value = 'Selecciona quién paga o recibe este movimiento.'
-      return
+      return false
     }
     if (recurringDraft.share_mode !== 'equal') {
       error.value = splitValidation(
@@ -111,7 +111,7 @@ export function useRecurring({
         recurringDraft.share_mode === 'percent' ? 100 : recurringDraft.amount,
         recurringDraft.share_mode === 'percent',
       )
-      if (error.value) return
+      if (error.value) return false
     }
     const wasEditing = Boolean(recurringDraft.id)
     saving.value = true
@@ -125,7 +125,11 @@ export function useRecurring({
       await loadNotifications()
       startRecurringRule()
       flash(wasEditing ? 'Programación actualizada.' : 'Movimiento recurrente guardado.')
-    } catch (reason) { error.value = reason.message }
+      return true
+    } catch (reason) {
+      error.value = reason.message
+      return false
+    }
     finally { saving.value = false }
   }
 

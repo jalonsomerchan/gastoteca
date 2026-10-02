@@ -18,7 +18,7 @@ const application = useGastoteca()
 provideGastoteca(application)
 const { loading, routeLoading, user, error, notice, dismissHeaderMenu, dismissSmartSelectOutside, routeLoadFailed, retryRouteLoad } = application
 const { pageTitle, pageBusy } = usePageAccessibility(application)
-const modalVisible = computed(() => application.modalOpen.value || application.settlementTarget.value || application.iconPickerOpen.value || application.deleteTarget.value || application.tagDeleteTarget.value || application.recurringDeleteTarget.value)
+const modalVisible = computed(() => application.modalOpen.value || application.dataEditorOpen.value || application.settlementTarget.value || application.iconPickerOpen.value || application.deleteTarget.value || application.tagDeleteTarget.value || application.recurringDeleteTarget.value)
 </script>
 
 <template>

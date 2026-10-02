@@ -7,12 +7,17 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { useBalances } from '../src/composables/useBalances.js'
 import { useExpenseSuggestions } from '../src/composables/useExpenseSuggestions.js'
 import { parseBankinterRows } from '../src/domain/bankinter.js'
+import { useDataSearch } from '../src/composables/useDataSearch.js'
 
 const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' })
 after(() => server.close())
 const { useGastoteca } = await server.ssrLoadModule('/src/composables/useGastoteca.js')
 const { provideGastoteca } = await server.ssrLoadModule('/src/composables/gastotecaContext.js')
 const { createGastotecaState } = await server.ssrLoadModule('/src/state/createGastotecaState.js')
+const { useDataEditor } = await server.ssrLoadModule('/src/composables/useDataEditor.js')
+const { useTags } = await server.ssrLoadModule('/src/composables/useTags.js')
+const { useBudgets } = await server.ssrLoadModule('/src/composables/useBudgets.js')
+const { useRecurring } = await server.ssrLoadModule('/src/composables/useRecurring.js')
 
 const alice = { uid: 'alice', name: 'Alicia', email: 'alice@example.test' }
 const bob = { uid: 'bob', name: 'Roberto', email: 'bob@example.test' }
@@ -101,6 +106,136 @@ for (const [route, view] of Object.entries(views)) {
     })
   })
 }
+
+test('data management pages expose a labelled search and keep forms inside closed editors', async () => {
+  for (const [route, view, id] of [
+    ['establishments', 'Catalog', 'catalog-search'], ['categories', 'Catalog', 'catalog-search'],
+    ['tags', 'Tags', 'tag-search'], ['budgets', 'Budgets', 'budget-search'],
+    ['recurring', 'Recurring', 'recurring-search'], ['quick-expenses', 'QuickExpenses', 'quick-template-search'],
+  ]) {
+    const html = await renderComponent(`/src/views/${view}View.vue`, route)
+    assert.ok(html.includes(`for="${id}"`), route)
+    assert.match(html, /type="search"/)
+    assert.doesNotMatch(html, /<form/)
+    assert.doesNotMatch(html, /Guardar cambios de iconos/)
+  }
+})
+
+test('management search ignores accents and case, combines terms and follows changes', () => {
+  const items = ref([{ name: 'Cafetería Central', city: 'Madrid' }, { name: 'Farmacia', city: 'Granada' }])
+  const { search, filteredItems } = useDataSearch(items, item => `${item.name} ${item.city}`)
+  search.value = '  MADRID cafeTERIA '
+  assert.deepEqual(filteredItems.value.map(item => item.name), ['Cafetería Central'])
+  search.value = 'inexistente'
+  assert.deepEqual(filteredItems.value, [])
+  items.value.push({ name: 'Inexistente', city: 'Madrid' })
+  assert.equal(filteredItems.value.length, 1)
+  search.value = '  '
+  assert.equal(filteredItems.value.length, 3)
+})
+
+async function mountDataEditor(actions, item) {
+  const state = createGastotecaState()
+  populate(state)
+  const { useGroupCatalogs } = await server.ssrLoadModule('/src/composables/useGroupCatalogs.js')
+  const catalogs = useGroupCatalogs(state)
+  const dependencies = { ...state, ...catalogs, freshToken: async () => 'test-token', flash: () => {}, loadNotifications: async () => {} }
+  let editor
+  const probe = { setup() {
+    editor = useDataEditor(actions(dependencies))
+    editor.openEditor(item)
+    return () => h('div')
+  } }
+  await renderToString(createSSRApp({ setup() {
+    provideGastoteca(state)
+    return () => h(probe)
+  } }))
+  return { ...state, ...editor }
+}
+
+test('data editor cancellation discards changes and busy saves prevent closing or opening again', async () => {
+  const original = { id: 1, name: 'Viaje' }
+  const editor = await mountDataEditor(state => ({
+    reset: tag => Object.assign(state.tagDraft, { id: tag?.id || '', name: tag?.name || '' }),
+    save: async () => false,
+  }), original)
+  editor.tagDraft.name = 'Cambio sin guardar'
+  assert.equal(original.name, 'Viaje')
+  editor.saving.value = true
+  editor.closeEditor()
+  editor.openEditor({ id: 2, name: 'Otra etiqueta' })
+  assert.equal(editor.editorOpen.value, true)
+  assert.equal(editor.tagDraft.name, 'Cambio sin guardar')
+  editor.saving.value = false
+  editor.closeEditor()
+  assert.equal(editor.editorOpen.value, false)
+  assert.equal(editor.dataEditorOpen.value, false)
+  assert.deepEqual(editor.tagDraft, { id: '', name: '' })
+})
+
+test('tag editor retains a failed draft and closes only after a successful API save', async t => {
+  let fail = true
+  let payload
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    payload = JSON.parse(options.body)
+    if (fail) return { ok: false, status: 422, json: async () => ({ message: 'La etiqueta ya existe.' }) }
+    return { ok: true, json: async () => ({ data: { group: { tags: [{ ...payload }] } } }) }
+  })
+  const editor = await mountDataEditor(state => ({
+    reset: tag => Object.assign(state.tagDraft, { id: tag?.id || '', name: tag?.name || '' }),
+    save: useTags(state).saveTag,
+  }), { id: 1, name: 'Viaje' })
+  editor.tagDraft.name = 'Vacaciones'
+  await editor.submitEditor()
+  assert.equal(editor.editorOpen.value, true)
+  assert.equal(editor.error.value, 'La etiqueta ya existe.')
+  assert.equal(editor.tagDraft.name, 'Vacaciones')
+  fail = false
+  await editor.submitEditor()
+  assert.deepEqual(payload, { id: 1, name: 'Vacaciones' })
+  assert.equal(editor.group.value.tags[0].name, 'Vacaciones')
+  assert.equal(editor.editorOpen.value, false)
+  assert.equal(editor.dataEditorOpen.value, false)
+})
+
+test('budget editor keeps validation failures open and closes after saving the category limit', async t => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (_url, options) => ({
+    ok: true, json: async () => ({ data: { group: { budgets: [JSON.parse(options.body)] } } }),
+  }))
+  const editor = await mountDataEditor(state => ({
+    reset: budget => Object.assign(state.budgetDraft, { category: budget?.category || 'food', monthly_limit: budget?.monthly_limit || '' }),
+    save: useBudgets(state).saveBudget,
+  }), { category: 'food', monthly_limit: '-1' })
+  await editor.submitEditor()
+  assert.equal(fetchMock.mock.callCount(), 0)
+  assert.equal(editor.editorOpen.value, true)
+  assert.match(editor.error.value, /mayor que cero/)
+  editor.budgetDraft.monthly_limit = '250.00'
+  await editor.submitEditor()
+  assert.equal(editor.group.value.budgets[0].monthly_limit, '250.00')
+  assert.equal(editor.editorOpen.value, false)
+})
+
+test('recurring editor validates before saving and preserves the split in the API request', async t => {
+  let payload
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    payload = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ data: { group: { recurring: [{ id: 1, payload }] } } }) }
+  })
+  const editor = await mountDataEditor(state => {
+    const actions = useRecurring(state)
+    return { reset: actions.startRecurringRule, save: actions.saveRecurring }
+  }, { id: 1, payload: { name: 'Alquiler', amount: 500, category: 'home', paid_by_uid: 'alice', applies_to_all: true, share_mode: 'amount', participant_shares: { alice: 200, bob: 300 } } })
+  editor.recurringDraft.amount = '0'
+  await editor.submitEditor()
+  assert.equal(fetchMock.mock.callCount(), 0)
+  assert.equal(editor.editorOpen.value, true)
+  editor.recurringDraft.amount = '500'
+  await editor.submitEditor()
+  assert.equal(payload.id, 1)
+  assert.deepEqual(payload.participant_shares, { alice: 200, bob: 300 })
+  assert.equal(editor.editorOpen.value, false)
+})
 
 test('expense editor clones participants and validates a missing transaction type', async () => {
   const html = await renderComponent('/src/components/dialogs/ExpenseDialog.vue', 'expenses', app => {

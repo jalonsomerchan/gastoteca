@@ -23,6 +23,7 @@ export function createGastotecaState() {
   const group = ref(null)
   const stats = ref({ total: 0, count: 0, average: 0, current_month_total: 0, by_category: [], by_member: [], by_participant: [], by_title: [], by_establishment: [], by_payment_method: [], monthly: [] })
   const modalOpen = ref(false)
+  const dataEditorOpen = ref(false)
   const quickExpenseMode = ref(false)
   const quickAmount = ref('')
   const quickAmountInput = ref(null)
@@ -125,6 +126,7 @@ export function createGastotecaState() {
     group,
     stats,
     modalOpen,
+    dataEditorOpen,
     quickExpenseMode,
     quickAmount,
     quickAmountInput,
