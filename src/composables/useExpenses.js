@@ -2,7 +2,7 @@ import { isPositiveAmount, splitValidation } from '../domain/validation.js'
 import { postJson } from '../lib/api.js'
 import { historyFieldLabels, paymentMethodLabel } from '../domain/catalogs.js'
 import { money, dateLabel, normalizeName } from '../utils/formatters.js'
-import { nextTick } from 'vue'
+import { computed, nextTick } from 'vue'
 
 function equalShareCents(amount, count, index) {
   const totalCents = Math.round((Number(amount) || 0) * 100)
@@ -76,6 +76,17 @@ export function useExpenses({
   loadNotifications,
 }) {
   let expenseHistoryRequestId = 0
+  const ownedQuickExpenseTemplates = computed(() => quickExpenseTemplates.value.filter(canEditQuickExpenseTemplate))
+
+  function canEditQuickExpenseTemplate(template) {
+    return template.can_edit !== false && (!template.created_by || template.created_by === currentMember.value?.uid)
+  }
+
+  function requireOwnQuickExpenseTemplate(template) {
+    if (canEditQuickExpenseTemplate(template)) return true
+    error.value = 'Solo quien creó este gasto rápido puede modificarlo.'
+    return false
+  }
 
   function openExpense(expense = null) {
     error.value = ''
@@ -171,6 +182,7 @@ export function useExpenses({
 
   function openQuickTemplateEditor(template = null, returnToManager = false) {
     error.value = ''
+    if (template && !requireOwnQuickExpenseTemplate(template)) return
     quickTemplateEditorReturnToManager.value = returnToManager
     if (returnToManager) modalOpen.value = true
     quickExpenseMode.value = false
@@ -181,6 +193,9 @@ export function useExpenses({
       id: template?.id || '',
       title: template?.title || '',
       icon: template?.icon || 'mdi:lightning-bolt-outline',
+      visibility: template?.visibility === 'group' ? 'group' : 'private',
+      active: template?.active !== false,
+      sort_order: template?.sort_order ?? ownedQuickExpenseTemplates.value.length,
       fields: [...(template?.fields || ['name', 'amount', 'category', 'paid_by_type'])],
       name: template?.name || '',
       amount: template?.amount ?? '',
@@ -210,14 +225,14 @@ export function useExpenses({
     if (saving.value) return false
     saving.value = true
     error.value = ''
-    const orderedTemplates = templates.map((template, sort_order) => ({
+    const orderedTemplates = templates.filter(canEditQuickExpenseTemplate).map((template, sort_order) => ({
       ...template,
       active: template.active !== false,
       sort_order,
     }))
     try {
       const data = await postJson('gastoteca/save_quick_expense_templates', await freshToken(true), { templates: orderedTemplates })
-      quickExpenseTemplates.value = data.templates || orderedTemplates
+      quickExpenseTemplates.value = data.templates || [...orderedTemplates, ...quickExpenseTemplates.value.filter(template => !canEditQuickExpenseTemplate(template))]
       if (notice) flash(notice)
       return true
     } catch (reason) {
@@ -261,7 +276,7 @@ export function useExpenses({
       error.value = 'Selecciona al menos una persona para repartir este gasto.'
       return
     }
-    if (!template.id && quickExpenseTemplates.value.length >= 12) {
+    if (!template.id && ownedQuickExpenseTemplates.value.length >= 12) {
       error.value = 'Ya has creado el máximo de 12 gastos rápidos.'
       return
     }
@@ -270,6 +285,8 @@ export function useExpenses({
       id: template.id || globalThis.crypto?.randomUUID?.() || `quick-${Date.now()}`,
       title,
       icon: template.icon || 'mdi:lightning-bolt-outline',
+      visibility: template.visibility === 'group' ? 'group' : 'private',
+      created_by: currentMember.value?.uid || '',
       fields,
       name: template.name.trim(),
       amount: template.amount === '' ? '' : Number(template.amount).toFixed(2),
@@ -288,10 +305,10 @@ export function useExpenses({
       recurrence: template.recurrence,
       occurred_at: template.occurred_at,
       active: template.active !== false,
-      sort_order: Number.isInteger(template.sort_order) ? template.sort_order : quickExpenseTemplates.value.length,
+      sort_order: Number.isInteger(template.sort_order) ? template.sort_order : ownedQuickExpenseTemplates.value.length,
     }
 
-    const templates = [...quickExpenseTemplates.value]
+    const templates = [...ownedQuickExpenseTemplates.value]
     const existingIndex = templates.findIndex(item => item.id === savedTemplate.id)
     if (existingIndex >= 0) templates[existingIndex] = savedTemplate
     else templates.push(savedTemplate)
@@ -302,7 +319,8 @@ export function useExpenses({
   }
 
   async function deleteQuickExpenseTemplate(template) {
-    const templates = quickExpenseTemplates.value.filter(item => item.id !== template.id)
+    if (!requireOwnQuickExpenseTemplate(template)) return false
+    const templates = ownedQuickExpenseTemplates.value.filter(item => item.id !== template.id)
     return saveQuickExpenseTemplates(templates, `«${template.title}» eliminado.`)
   }
 
@@ -583,5 +601,5 @@ export function useExpenses({
     }
   }
 
-  return { openExpense, closeExpenseModal, loadExpenseHistory, historyChangeEntries, historyValue, startQuickExpense, saveQuickExpense, openQuickTemplateEditor, saveQuickExpenseTemplate, saveQuickExpenseTemplates, cancelQuickTemplateEditor, applyQuickExpenseTemplate, saveQuickExpenseTemplatePrompt, deleteQuickExpenseTemplate, selectFrequentName, setShareMode, shareValue, addDraftTag, saveExpense, confirmExpense, removeExpense }
+  return { openExpense, closeExpenseModal, loadExpenseHistory, historyChangeEntries, historyValue, startQuickExpense, saveQuickExpense, ownedQuickExpenseTemplates, canEditQuickExpenseTemplate, openQuickTemplateEditor, saveQuickExpenseTemplate, saveQuickExpenseTemplates, cancelQuickTemplateEditor, applyQuickExpenseTemplate, saveQuickExpenseTemplatePrompt, deleteQuickExpenseTemplate, selectFrequentName, setShareMode, shareValue, addDraftTag, saveExpense, confirmExpense, removeExpense }
 }

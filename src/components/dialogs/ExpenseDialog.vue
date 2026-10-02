@@ -18,6 +18,7 @@ const {
   quickAmount,
   quickAmountInput,
   quickExpenseTemplates,
+  ownedQuickExpenseTemplates,
   quickTemplateEditorOpen,
   quickTemplatePromptOpen,
   quickTemplateDraft,
@@ -216,6 +217,14 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
         <label class="quick-template-title">
           <span>Nombre del botón *</span><input v-model="quickTemplateDraft.title" maxlength="60" placeholder="Café, compra semanal…" required />
         </label>
+        <label class="quick-template-title" for="quick-template-visibility">
+          <span>¿Quién puede usar este gasto rápido?</span>
+          <select id="quick-template-visibility" v-model="quickTemplateDraft.visibility" :disabled="saving" aria-describedby="quick-template-visibility-hint">
+            <option value="private">Solo para mí</option>
+            <option value="group">Todo el grupo</option>
+          </select>
+          <small id="quick-template-visibility-hint">{{ quickTemplateDraft.visibility === 'group' ? 'Todos los miembros podrán usar esta plantilla. Tú podrás editarla o dejar de compartirla.' : 'Esta plantilla solo aparecerá en tus gastos rápidos.' }}</small>
+        </label>
         <div class="quick-template-icon-setting">
           <span class="quick-template-icon-preview"><iconify-icon aria-hidden="true" :icon="quickTemplateDraft.icon || 'mdi:lightning-bolt-outline'"></iconify-icon></span>
           <button type="button" class="secondary" @click="openIconPicker(quickTemplateDraft)">Elegir icono</button>
@@ -345,12 +354,12 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
             </button>
             <p class="quick-expense-section-label saved-quick-expenses-label">Plantillas guardadas · reutilizables</p>
             <p v-if="!activeQuickExpenseTemplates.length" class="quick-template-empty-hint">{{ quickExpenseTemplates.length ? 'No hay plantillas activas. Puedes volver a activarlas desde Gestionar plantillas.' : 'Crea una plantilla para añadir gastos frecuentes con un toque.' }}</p>
-            <div v-for="template in activeQuickExpenseTemplates" :key="template.id" class="quick-template-option">
+            <div v-for="template in activeQuickExpenseTemplates" :key="`${template.created_by || user?.uid}:${template.id}`" class="quick-template-option">
               <button type="button" class="quick-expense-choice saved-quick-expense" :disabled="saving" @click="applyQuickExpenseTemplate(template)">
-                <iconify-icon aria-hidden="true" :icon="template.icon || 'mdi:lightning-bolt-outline'"></iconify-icon><span><strong>{{ template.title }}</strong><small>{{ quickTemplateHint(template) }}</small></span>
+                <iconify-icon aria-hidden="true" :icon="template.icon || 'mdi:lightning-bolt-outline'"></iconify-icon><span><strong>{{ template.title }}</strong><small>{{ quickTemplateHint(template) }} · {{ template.visibility === 'group' ? 'Todo el grupo' : 'Solo para mí' }}</small></span>
               </button>
             </div>
-            <button type="button" class="quick-template-create" :disabled="saving || quickExpenseTemplates.length >= 12" @click="openQuickTemplateEditor()"><PhPlus aria-hidden="true" :size="18" /><span><strong>Crear plantilla</strong><small>{{ quickExpenseTemplates.length >= 12 ? 'Has alcanzado el máximo de 12' : 'Elige qué datos rellenar automáticamente' }}</small></span></button>
+            <button type="button" class="quick-template-create" :disabled="saving || ownedQuickExpenseTemplates.length >= 12" @click="openQuickTemplateEditor()"><PhPlus aria-hidden="true" :size="18" /><span><strong>Crear plantilla</strong><small>{{ ownedQuickExpenseTemplates.length >= 12 ? 'Has alcanzado el máximo de 12 propias' : 'Elige qué datos rellenar automáticamente' }}</small></span></button>
             <button v-if="quickExpenseTemplates.length" type="button" class="quick-template-manage" :disabled="saving" @click="closeExpenseModal(); navigateTo('/gastos-rapidos')">Gestionar plantillas</button>
           </div>
         </fieldset>

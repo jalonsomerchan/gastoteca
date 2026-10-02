@@ -193,6 +193,8 @@ export function useGastoteca() {
     historyValue,
     startQuickExpense,
     saveQuickExpense,
+    ownedQuickExpenseTemplates,
+    canEditQuickExpenseTemplate,
     openQuickTemplateEditor,
     saveQuickExpenseTemplate,
     saveQuickExpenseTemplates,
@@ -438,6 +440,10 @@ export function useGastoteca() {
     if (route.name === 'establishments' || route.name === 'categories') prepareCatalogDraft()
     if (!recurringDraft.id && !recurringDraft.paid_by_uid) recurringDraft.paid_by_uid = currentMember.value?.uid || memberOptions.value[0]?.uid || ''
   })
+
+  watch(() => group.value?.id, () => {
+    quickExpenseTemplates.value = []
+  }, { flush: 'sync' })
 
   watch(() => group.value?.default_city, (city) => { defaultCityDraft.value = city || '' }, { immediate: true })
 
@@ -705,6 +711,8 @@ export function useGastoteca() {
     historyValue,
     startQuickExpense,
     saveQuickExpense,
+    ownedQuickExpenseTemplates,
+    canEditQuickExpenseTemplate,
     openQuickTemplateEditor,
     saveQuickExpenseTemplate,
     saveQuickExpenseTemplates,

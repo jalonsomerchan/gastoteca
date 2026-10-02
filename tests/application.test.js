@@ -88,7 +88,7 @@ test('application state and editable drafts are isolated between instances', () 
   assert.deepEqual(second.expenses.value, [])
 })
 
-const views = { expenses: 'Expenses', 'bulk-edit': 'BulkEdit', import: 'Import', balance: 'Balance', stats: 'Statistics', budgets: 'Budgets', recurring: 'Recurring', tags: 'Tags', establishments: 'Catalog', categories: 'Catalog', group: 'Group', settings: 'Settings' }
+const views = { expenses: 'Expenses', 'quick-expenses': 'QuickExpenses', 'bulk-edit': 'BulkEdit', import: 'Import', balance: 'Balance', stats: 'Statistics', budgets: 'Budgets', recurring: 'Recurring', tags: 'Tags', establishments: 'Catalog', categories: 'Catalog', group: 'Group', settings: 'Settings' }
 for (const [route, view] of Object.entries(views)) {
   test(`renders ${route} with populated state`, async () => {
     const html = await renderComponent(`/src/views/${view}View.vue`, route)
@@ -173,6 +173,141 @@ function expenseEditor() {
   return { ...state, ...actions }
 }
 
+function quickTemplate(overrides = {}) {
+  return {
+    id: 'coffee', title: 'Café', name: 'Café', amount: '2.50',
+    fields: ['name', 'amount', 'paid_by_type'], paid_by_type: 'person', paid_by_uid: 'alice',
+    visibility: 'private', created_by: 'alice', can_edit: true,
+    ...overrides,
+  }
+}
+
+test('quick template editor defaults to private and offers sharing with the group', async () => {
+  const html = await renderComponent('/src/components/dialogs/ExpenseDialog.vue', 'quick-expenses', app => {
+    app.openQuickTemplateEditor(null, true)
+    assert.equal(app.quickTemplateDraft.visibility, 'private')
+  })
+  assert.match(html, /for="quick-template-visibility"/)
+  assert.match(html, /value="private" selected>Solo para mí/)
+  assert.match(html, /value="group">Todo el grupo/)
+})
+
+test('saving a shared quick template counts only the creator templates and retains those of others', async t => {
+  const shared = Array.from({ length: 12 }, (_, index) => quickTemplate({ id: `shared-${index}`, created_by: 'bob', visibility: 'group', can_edit: false }))
+  let payload
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    payload = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ data: { templates: [...payload.templates, ...shared] } }) }
+  })
+  const editor = expenseEditor()
+  editor.quickExpenseTemplates.value = shared
+  editor.openQuickTemplateEditor(null, true)
+  Object.assign(editor.quickTemplateDraft, { title: 'Mi café', name: 'Café', amount: '2.50', visibility: 'group' })
+  await editor.saveQuickExpenseTemplate()
+  assert.equal(payload.templates.length, 1)
+  assert.equal(payload.templates[0].visibility, 'group')
+  assert.equal(payload.templates[0].created_by, 'alice')
+  assert.equal(editor.ownedQuickExpenseTemplates.value.length, 1)
+  assert.equal(editor.quickExpenseTemplates.value.length, 13)
+  assert.equal(editor.modalOpen.value, false)
+})
+
+test('editing an own shared template can make it private and preserves its inactive state', async t => {
+  let payload
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    payload = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ data: { templates: payload.templates } }) }
+  })
+  const editor = expenseEditor()
+  const template = quickTemplate({ visibility: 'group', active: false })
+  editor.quickExpenseTemplates.value = [template]
+  editor.openQuickTemplateEditor(template, true)
+  assert.equal(editor.quickTemplateDraft.visibility, 'group')
+  editor.quickTemplateDraft.visibility = 'private'
+  await editor.saveQuickExpenseTemplate()
+  assert.equal(payload.templates[0].visibility, 'private')
+  assert.equal(payload.templates[0].active, false)
+})
+
+test('deleting an own template does not delete another creator template with the same id', async t => {
+  let payload
+  const shared = quickTemplate({ created_by: 'bob', visibility: 'group', can_edit: false })
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    payload = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ data: { templates: [shared] } }) }
+  })
+  const editor = expenseEditor()
+  const own = quickTemplate()
+  editor.quickExpenseTemplates.value = [own, shared]
+  assert.equal(await editor.deleteQuickExpenseTemplate(own), true)
+  assert.deepEqual(payload.templates, [])
+  assert.deepEqual(editor.quickExpenseTemplates.value, [shared])
+})
+
+test('another member shared templates cannot be edited or deleted', async t => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => { throw new Error('Unexpected API request') })
+  const editor = expenseEditor()
+  const shared = quickTemplate({ created_by: 'bob', visibility: 'group', can_edit: false })
+  editor.quickExpenseTemplates.value = [shared]
+  editor.openQuickTemplateEditor(shared, true)
+  assert.equal(editor.quickTemplateEditorOpen.value, false)
+  assert.equal(await editor.deleteQuickExpenseTemplate(shared), false)
+  assert.equal(fetchMock.mock.callCount(), 0)
+  assert.match(editor.error.value, /Solo quien creó/)
+})
+
+test('batch saves send only owned templates while retaining other shared templates', async t => {
+  let payload
+  const shared = quickTemplate({ created_by: 'bob', visibility: 'group', can_edit: false })
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    payload = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ data: { templates: [...payload.templates, shared] } }) }
+  })
+  const editor = expenseEditor()
+  editor.quickExpenseTemplates.value = [shared, quickTemplate({ id: 'mine' })]
+  await editor.saveQuickExpenseTemplates(editor.quickExpenseTemplates.value)
+  assert.deepEqual(payload.templates.map(template => template.id), ['mine'])
+  assert.equal(editor.quickExpenseTemplates.value.length, 2)
+})
+
+test('another member can use a shared template to create an expense', async t => {
+  let payload
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    payload = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ data: { expenses: [], stats: { total: 0 } } }) }
+  })
+  const editor = expenseEditor()
+  await editor.applyQuickExpenseTemplate(quickTemplate({ created_by: 'bob', can_edit: false, visibility: 'group' }))
+  assert.equal(payload.name, 'Café')
+  assert.equal(payload.amount, '2.50')
+  assert.equal(payload.transaction_type, 'expense')
+  assert.equal(payload.visibility, undefined)
+  assert.equal(editor.modalOpen.value, false)
+})
+
+test('quick template manager shows visibility and only offers management for owned templates', async () => {
+  const html = await renderComponent('/src/views/QuickExpensesView.vue', 'quick-expenses', app => {
+    app.quickExpenseTemplates.value = [quickTemplate(), quickTemplate({ title: 'Compra compartida', created_by: 'bob', visibility: 'group', can_edit: false })]
+  })
+  assert.match(html, /Solo para mí/)
+  assert.match(html, /Todo el grupo/)
+  assert.match(html, /Creado por Roberto/)
+  assert.equal((html.match(/> Editar<\/button>/g) || []).length, 1)
+  assert.doesNotMatch(html, /aria-label="Eliminar Compra compartida"/)
+  assert.match(html, /1\/12 propias/)
+})
+
+test('changing groups clears the previous group quick templates', async () => {
+  await renderComponent('/src/views/QuickExpensesView.vue', 'quick-expenses', app => {
+    app.group.value.id = 1
+    app.quickExpenseTemplates.value = [quickTemplate({ created_by: 'bob', visibility: 'group', can_edit: false })]
+    app.group.value = { ...app.group.value, name: 'Renamed' }
+    assert.equal(app.quickExpenseTemplates.value.length, 1)
+    app.group.value = { ...app.group.value, id: 2 }
+    assert.deepEqual(app.quickExpenseTemplates.value, [])
+  })
+})
+
 test('saving an edited expense preserves API payload, refreshes data and closes the editor', async t => {
   let request
   t.mock.method(globalThis, 'fetch', async (url, options) => {
@@ -181,6 +316,7 @@ test('saving an edited expense preserves API payload, refreshes data and closes 
   })
   const editor = expenseEditor()
   editor.openExpense(expense)
+  editor.setShareMode('amount')
   editor.draft.amount = '40.00'
   editor.draft.participant_shares = { alice: '25.00', bob: '15.00' }
   await editor.saveExpense()
@@ -255,6 +391,7 @@ test('invalid custom shares prevent the API request', async t => {
   const fetchMock = t.mock.method(globalThis, 'fetch', async () => { throw new Error('Unexpected API request') })
   const editor = expenseEditor()
   editor.openExpense(expense)
+  editor.setShareMode('amount')
   editor.draft.participant_shares = { alice: 2, bob: 2 }
   await editor.saveExpense()
   assert.match(editor.error.value, /sumar el importe total/)

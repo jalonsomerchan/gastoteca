@@ -29,6 +29,8 @@ El controlador principal está en `/Applications/MAMP/htdocs/OV2/api/mistergasto
 - `GET /gastoteca/telegram_settings` y `POST /gastoteca/save_telegram_settings`: consultan y guardan los tipos de aviso por Telegram.
 - `POST /gastoteca/save_catalog_icons`: guarda los iconos Iconify del grupo para establecimientos y categorías.
 - `POST /gastoteca/save_catalog_item`: crea o renombra un establecimiento o categoría y guarda su icono.
+- `GET /gastoteca/quick_expense_templates`: devuelve las plantillas propias y las compartidas por miembros del grupo, con `visibility` (`private` o `group`), `created_by` y `can_edit`.
+- `POST /gastoteca/save_quick_expense_templates`: guarda hasta 12 plantillas del usuario autenticado; cada una puede ser personal o para todo el grupo. Solo su creador las gestiona; la respuesta incluye todas las plantillas disponibles para ese usuario.
 - `POST /gastoteca/invite_email`: envía una invitación por email.
 - `POST /gastoteca/join_group`: une mediante código.
 - `POST /gastoteca/leave_group`: abandona el grupo y crea uno personal.
@@ -65,6 +67,12 @@ Para añadir una pantalla, crea una vista en `src/views`, registra su ruta y añ
 npm run lint
 npm test
 npm run build
+```
+
+La visibilidad y la autoría de las plantillas se prueban también contra el controlador PHP con almacenamiento simulado, sin conectar con Firebase ni MySQL:
+
+```sh
+php tests/quick-template-api.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
 ```
 
 Las pruebas usan el ejecutor de Node y Vite para cargar componentes Vue, sin dependencias de pruebas adicionales. Cubren balances y liquidaciones, sugerencias, aislamiento del estado, reparto, contratos de guardado y borrado, errores de API y renderizado de las diez rutas y los diálogos. Las peticiones de las pruebas de operaciones están simuladas: no requieren Firebase ni modifican datos reales. El workflow ejecuta las pruebas antes de generar la build.

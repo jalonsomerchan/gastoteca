@@ -34,6 +34,7 @@ export function createGastotecaState() {
     id: '',
     title: '',
     icon: 'mdi:lightning-bolt-outline',
+    visibility: 'private',
     fields: ['name', 'amount', 'category', 'paid_by_type'],
     name: '',
     amount: '',

@@ -30,8 +30,9 @@
 .quick-template-prompt-note { margin:1rem 0 0; color:var(--muted); font-size:.73rem; line-height:1.5; }
 .quick-template-title { display:grid; gap:.4rem; margin-bottom:1rem; }
 .quick-template-title>span { color:#59645f; font-size:.78rem; font-weight:700; }
-.quick-template-title input { width:100%; height:45px; padding:0 .8rem; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:11px; outline:none; }
-.quick-template-title input:focus,.quick-template-setting>input:focus,.quick-template-setting>select:focus,.quick-template-setting>textarea:focus,.quick-template-setting>.money-input:focus-within,.template-share-values input:focus { border-color:var(--green-focus); box-shadow:0 0 0 3px #2f6b5514; outline:none; }
+.quick-template-title input,.quick-template-title select { width:100%; height:45px; padding:0 .8rem; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:11px; outline:none; font:inherit; }
+.quick-template-title small { color:var(--muted); font-size:.7rem; line-height:1.45; }
+.quick-template-title input:focus,.quick-template-title select:focus,.quick-template-setting>input:focus,.quick-template-setting>select:focus,.quick-template-setting>textarea:focus,.quick-template-setting>.money-input:focus-within,.template-share-values input:focus { border-color:var(--green-focus); box-shadow:0 0 0 3px #2f6b5514; outline:none; }
 .quick-template-icon-setting { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; margin:0 0 1rem; }
 .quick-template-icon-preview { display:grid; place-items:center; width:48px; height:48px; color:var(--green); background:var(--soft); border-radius:14px; }
 .quick-template-icon-preview iconify-icon { width:26px; height:26px; }

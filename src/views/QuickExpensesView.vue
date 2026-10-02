@@ -9,6 +9,9 @@ const {
   saving,
   error,
   quickExpenseTemplates,
+  ownedQuickExpenseTemplates,
+  canEditQuickExpenseTemplate,
+  memberLabel,
   openQuickTemplateEditor,
   saveQuickExpenseTemplates,
   deleteQuickExpenseTemplate,
@@ -17,7 +20,7 @@ const {
 const deletingTemplate = ref(null)
 const orderedTemplates = computed(() => quickExpenseTemplates.value
   .map((template, index) => ({ template, index, order: template.sort_order === undefined ? index : Number(template.sort_order) }))
-  .sort((a, b) => a.order - b.order || a.index - b.index)
+  .sort((a, b) => Number(canEditQuickExpenseTemplate(b.template)) - Number(canEditQuickExpenseTemplate(a.template)) || a.order - b.order || a.index - b.index)
   .map(item => item.template))
 const activeTemplateCount = computed(() => quickExpenseTemplates.value.filter(template => template.active !== false).length)
 const fieldLabels = {
@@ -40,7 +43,8 @@ function templateFields(template) {
 }
 
 async function moveTemplate(template, offset) {
-  const templates = [...orderedTemplates.value]
+  if (!canEditQuickExpenseTemplate(template)) return
+  const templates = orderedTemplates.value.filter(canEditQuickExpenseTemplate)
   const currentIndex = templates.findIndex(item => item.id === template.id)
   const nextIndex = currentIndex + offset
   if (currentIndex < 0 || nextIndex < 0 || nextIndex >= templates.length || saving.value) return
@@ -50,7 +54,8 @@ async function moveTemplate(template, offset) {
 }
 
 async function toggleTemplate(template) {
-  const templates = orderedTemplates.value.map(item => item.id === template.id
+  if (!canEditQuickExpenseTemplate(template)) return
+  const templates = orderedTemplates.value.filter(canEditQuickExpenseTemplate).map(item => item.id === template.id
     ? { ...item, active: item.active === false }
     : item)
   await saveQuickExpenseTemplates(templates, template.active === false ? 'Gasto rápido activado.' : 'Gasto rápido desactivado.')
@@ -69,10 +74,10 @@ async function confirmDelete() {
     <div>
       <p class="eyebrow">ATAJOS PARA AÑADIR GASTOS</p>
       <h1>Gastos rápidos</h1>
-      <p>Organiza las plantillas que aparecen al añadir un movimiento.</p>
+      <p>Crea plantillas para ti o compártelas con todo el grupo.</p>
     </div>
-    <button type="button" class="primary" :disabled="saving || quickExpenseTemplates.length >= 12" @click="openQuickTemplateEditor(null, true)">
-      <PhPlus aria-hidden="true" :size="18" /> {{ quickExpenseTemplates.length >= 12 ? 'Máximo de 12' : 'Nuevo gasto rápido' }}
+    <button type="button" class="primary" :disabled="saving || ownedQuickExpenseTemplates.length >= 12" @click="openQuickTemplateEditor(null, true)">
+      <PhPlus aria-hidden="true" :size="18" /> {{ ownedQuickExpenseTemplates.length >= 12 ? 'Máximo de 12 propias' : 'Nuevo gasto rápido' }}
     </button>
   </section>
 
@@ -80,25 +85,26 @@ async function confirmDelete() {
     <div class="feature-panel-heading">
       <div>
         <p class="eyebrow">DISPONIBLES AL AÑADIR UN GASTO</p>
-        <h2>Tus plantillas</h2>
+        <h2>Plantillas disponibles</h2>
       </div>
-      <span class="feature-count">{{ activeTemplateCount }} activas · {{ quickExpenseTemplates.length }}/12</span>
+      <span class="feature-count">{{ activeTemplateCount }} activas · {{ ownedQuickExpenseTemplates.length }}/12 propias</span>
     </div>
     <FormError :message="error" />
 
     <div v-if="orderedTemplates.length" class="quick-template-management-list">
-      <article v-for="(template, index) in orderedTemplates" :key="template.id" class="quick-template-management-item" :class="{ disabled: template.active === false }">
+      <article v-for="(template, index) in orderedTemplates" :key="`${template.created_by || 'own'}:${template.id}`" class="quick-template-management-item" :class="{ disabled: template.active === false }">
         <div class="quick-template-reorder" aria-label="Cambiar orden">
-          <button type="button" class="icon-button" :disabled="saving || index === 0" :aria-label="`Subir ${template.title}`" title="Subir" @click="moveTemplate(template, -1)"><PhArrowUp aria-hidden="true" :size="17" /></button>
-          <button type="button" class="icon-button" :disabled="saving || index === orderedTemplates.length - 1" :aria-label="`Bajar ${template.title}`" title="Bajar" @click="moveTemplate(template, 1)"><PhArrowDown aria-hidden="true" :size="17" /></button>
+          <button v-if="canEditQuickExpenseTemplate(template)" type="button" class="icon-button" :disabled="saving || index === 0" :aria-label="`Subir ${template.title}`" title="Subir" @click="moveTemplate(template, -1)"><PhArrowUp aria-hidden="true" :size="17" /></button>
+          <button v-if="canEditQuickExpenseTemplate(template)" type="button" class="icon-button" :disabled="saving || index === ownedQuickExpenseTemplates.length - 1" :aria-label="`Bajar ${template.title}`" title="Bajar" @click="moveTemplate(template, 1)"><PhArrowDown aria-hidden="true" :size="17" /></button>
         </div>
         <span class="quick-template-management-icon"><iconify-icon aria-hidden="true" :icon="template.icon || 'mdi:lightning-bolt-outline'"></iconify-icon></span>
         <div class="quick-template-management-copy">
           <strong>{{ template.title }}</strong>
           <small>{{ templateFields(template) }}</small>
+          <small>{{ template.visibility === 'group' ? 'Todo el grupo' : 'Solo para mí' }}<template v-if="!canEditQuickExpenseTemplate(template)"> · Creado por {{ memberLabel(template.created_by) }}</template></small>
         </div>
         <span class="quick-template-management-status" :class="{ paused: template.active === false }">{{ template.active === false ? 'Desactivado' : 'Activo' }}</span>
-        <div class="feature-row-actions quick-template-management-actions">
+        <div v-if="canEditQuickExpenseTemplate(template)" class="feature-row-actions quick-template-management-actions">
           <button type="button" class="ghost small-action" :disabled="saving" @click="openQuickTemplateEditor(template, true)"><PhPencilSimple aria-hidden="true" :size="15" /> Editar</button>
           <button type="button" class="ghost small-action" :disabled="saving" @click="toggleTemplate(template)">{{ template.active === false ? 'Activar' : 'Desactivar' }}</button>
           <button type="button" class="danger-button small-action" :disabled="saving" :aria-label="`Eliminar ${template.title}`" @click="error = ''; deletingTemplate = template">Eliminar</button>
@@ -115,6 +121,7 @@ async function confirmDelete() {
   </section>
 
   <ConfirmDialog v-if="deletingTemplate" title-id="delete-quick-template-title" :title="`¿Eliminar «${deletingTemplate.title}»?`" :error="error" :saving="saving" @cancel="deletingTemplate = null" @confirm="confirmDelete">
+    <template v-if="deletingTemplate.visibility === 'group'">Dejará de estar disponible para todos los miembros del grupo. </template>
     Esta plantilla dejará de aparecer al añadir un gasto rápido. Los gastos que ya hayas creado no cambiarán.
   </ConfirmDialog>
 </template>

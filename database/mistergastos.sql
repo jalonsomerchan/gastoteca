@@ -240,6 +240,15 @@ CREATE TABLE IF NOT EXISTS mg_notification_preferences (
   CONSTRAINT fk_mg_notification_preferences_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS mg_quick_expense_templates (
+  group_id BIGINT UNSIGNED NOT NULL,
+  uid VARCHAR(128) NOT NULL,
+  templates LONGTEXT NOT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (group_id, uid),
+  CONSTRAINT fk_mg_quick_templates_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS mg_expense_history (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   group_id BIGINT UNSIGNED NOT NULL,
