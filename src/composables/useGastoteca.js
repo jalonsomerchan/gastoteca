@@ -530,6 +530,11 @@ export function useGastoteca() {
     router.push(path)
   }
 
+  function refreshExpenses() {
+    if (route.name !== 'expenses' || !user.value) return
+    return loadRouteData('expenses')
+  }
+
   onMounted(async () => {
     window.addEventListener('keydown', handleHeaderEscape)
     document.addEventListener('visibilitychange', refreshNotificationsWhenVisible)
@@ -571,6 +576,7 @@ export function useGastoteca() {
   return {
     routeLoadFailed,
     retryRouteLoad: () => loadRouteData(route.name),
+    refreshExpenses,
     loadMoreExpenses: () => { visibleExpenseCount.value += 20 },
     signOut,
     route,
@@ -708,6 +714,7 @@ export function useGastoteca() {
     deleteQuickExpenseTemplate,
     selectFrequentName,
     setShareMode,
+    shareValue,
     addDraftTag,
     openSettlement,
     saveSettlement,

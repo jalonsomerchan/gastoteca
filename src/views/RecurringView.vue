@@ -153,9 +153,9 @@ const {
           </label>
         </div>
         <div class="feature-split-heading">
-          <span>Reparto *</span><label><input :checked="recurringDraft.share_mode === 'equal'" type="radio" name="recurringDraft-share_mode" @change="setRecurringShareMode('equal')" /> Por igual</label><label><input :checked="recurringDraft.share_mode === 'amount'" type="radio" name="recurringDraft-share_mode" @change="setRecurringShareMode('amount')" /> Personalizado</label>
+          <span>Reparto *</span><label><input :checked="recurringDraft.share_mode === 'equal'" type="radio" name="recurringDraft-share_mode" @change="setRecurringShareMode('equal')" /> Por igual</label><label><input :checked="recurringDraft.share_mode === 'amount'" type="radio" name="recurringDraft-share_mode" @change="setRecurringShareMode('amount')" /> Por cantidades</label><label><input :checked="recurringDraft.share_mode === 'percent'" type="radio" name="recurringDraft-share_mode" @change="setRecurringShareMode('percent')" /> Por porcentajes</label>
         </div>
-        <div v-if="recurringDraft.share_mode === 'amount'" class="feature-share-list">
+        <div v-if="recurringDraft.share_mode !== 'equal'" class="feature-share-list">
           <label v-for="member in recurringSplitMembers" :key="member.uid">
             <span>{{ member.name || member.email }}</span><div class="money-input">
               <input v-model="recurringDraft.participant_shares[member.uid]"
@@ -163,7 +163,7 @@ const {
                      min="0"
                      step="0.01"
                      :aria-label="`Parte de ${member.name || member.email}`"
-              /><b>€</b>
+              /><b>{{ recurringDraft.share_mode === 'percent' ? '%' : '€' }}</b>
             </div>
           </label>
         </div>

@@ -61,6 +61,7 @@ export const historyFieldLabels = {
   city: 'Ciudad',
   occurred_at: 'Fecha del movimiento',
   amount: 'Importe',
+  share_mode: 'Modo de reparto',
   payment_method: 'Método de pago',
   paid_by_type: 'Quién pagó/recibió',
   paid_by_uid: 'Pagador o receptor',

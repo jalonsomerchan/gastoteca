@@ -19,7 +19,7 @@ El controlador principal está en `/Applications/MAMP/htdocs/OV2/api/mistergasto
 - `GET /gastoteca/expenses`: listado de gastos.
 - `GET /gastoteca/group`: datos del grupo y sus catálogos.
 - `GET /gastoteca/statistics`: agregados por categoría, pagador y mes.
-- `POST /gastoteca/save_expense`: crea o edita un gasto.
+- `POST /gastoteca/save_expense`: crea o edita un movimiento; acepta y devuelve `share_mode` (`equal`, `amount` o `percent`).
 - `POST /gastoteca/delete_expense`: elimina un gasto.
 - `POST /gastoteca/save_settlement`: registra un pago entre dos miembros y reduce la deuda pendiente.
 - `POST /gastoteca/save_budget` y `POST /gastoteca/delete_budget`: guardan o eliminan límites mensuales por categoría.

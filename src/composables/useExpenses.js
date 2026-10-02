@@ -4,6 +4,43 @@ import { historyFieldLabels, paymentMethodLabel } from '../domain/catalogs.js'
 import { money, dateLabel, normalizeName } from '../utils/formatters.js'
 import { nextTick } from 'vue'
 
+function equalShareCents(amount, count, index) {
+  const totalCents = Math.round((Number(amount) || 0) * 100)
+  if (count <= 0) return totalCents
+  const regularShare = Math.round(totalCents / count)
+  return index === count - 1 ? totalCents - regularShare * (count - 1) : regularShare
+}
+
+function hasEqualParticipantShares(expense) {
+  const participants = expense.participants || []
+  if (!participants.length) return false
+
+  const count = participants.length
+  const expected = Array.from({ length: count }, (_, index) => equalShareCents(expense.amount, count, index)).sort((a, b) => a - b)
+  const actual = participants.map(participant => Math.round(Number(participant.share_amount) * 100)).sort((a, b) => a - b)
+  return actual.length === expected.length && actual.every((amount, index) => amount === expected[index])
+}
+
+function participantSharesForDraft(expense, shareMode) {
+  const participants = expense.participants || []
+  if (shareMode !== 'percent') {
+    return Object.fromEntries(participants.map(participant => [participant.uid, Number(participant.share_amount).toFixed(2)]))
+  }
+
+  const total = Number(expense.amount) || 0
+  const totalCents = Math.round(total * 100)
+  const percentages = participants.map((participant, index) => {
+    const exactUnits = totalCents > 0 ? Math.round(Number(participant.share_amount) * 100) / totalCents * 10000 : 0
+    const units = Math.floor(exactUnits)
+    return { uid: participant.uid, index, units, remainder: exactUnits - units }
+  })
+  let remainingUnits = 10000 - percentages.reduce((sum, item) => sum + item.units, 0)
+  percentages.slice().sort((left, right) => right.remainder - left.remainder || left.index - right.index)
+    .slice(0, remainingUnits)
+    .forEach(item => { item.units += 1 })
+  return Object.fromEntries(percentages.map(item => [item.uid, (item.units / 100).toFixed(2)]))
+}
+
 export function useExpenses({
   error,
   expenseHistoryForId,
@@ -50,14 +87,20 @@ export function useExpenses({
     quickAmount.value = ''
     tagInput.value = ''
     const defaultPayerUid = currentMember.value?.uid || memberOptions.value[0]?.uid || ''
+    const shareMode = expense
+      ? ['equal', 'amount', 'percent'].includes(expense.share_mode)
+        ? expense.share_mode
+        : hasEqualParticipantShares(expense) ? 'equal' : 'amount'
+      : 'equal'
+    const participantShares = expense ? participantSharesForDraft(expense, shareMode) : {}
     Object.assign(draft, emptyDraft(), expense ? {
       ...expense,
       transaction_type: expense.transaction_type || 'expense',
       amount: Number(expense.amount).toFixed(2),
       occurred_at: expense.occurred_at.replace(' ', 'T').slice(0, 16),
       participant_uids: [...(expense.participant_uids || [])],
-      participant_shares: Object.fromEntries((expense.participants || []).map((participant) => [participant.uid, Number(participant.share_amount).toFixed(2)])),
-      share_mode: 'amount',
+      participant_shares: participantShares,
+      share_mode: shareMode,
       tags: [...(expense.tags || [])],
       recurrence: 'none',
     } : {
@@ -105,6 +148,7 @@ export function useExpenses({
     if (value === null || value === undefined || value === '') return '—'
     if (field === 'amount') return money(value)
     if (field === 'transaction_type') return value === 'income' ? 'Ingreso' : 'Gasto'
+    if (field === 'share_mode') return ({ equal: 'Dividir igualmente', amount: 'Por cantidad', percent: 'Por porcentaje' })[value] || String(value)
     if (field === 'category') return category(value).label
     if (field === 'occurred_at') return dateLabel(value)
     if (field === 'payment_method') return paymentMethodLabel(value)
@@ -430,6 +474,9 @@ export function useExpenses({
   }
 
   function shareValue(member, index) {
+    if (draft.share_mode === 'equal') {
+      return (equalShareCents(draft.amount, splitMembers.value.length, index) / 100).toFixed(2)
+    }
     const value = draft.participant_shares[member.uid]
     if (value !== undefined) return value
     const count = Math.max(1, splitMembers.value.length)

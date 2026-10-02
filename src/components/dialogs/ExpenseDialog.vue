@@ -57,6 +57,7 @@ const {
   openIconPicker,
   selectFrequentName,
   setShareMode,
+  shareValue,
   addDraftTag,
   saveExpense,
   confirmExpense,
@@ -128,9 +129,9 @@ function quickTemplateHint(template) {
   return 'Completar los datos que faltan'
 }
 
-function equalShare() {
-  const count = Math.max(1, splitMembers.value.length)
-  return money((Number(draft.amount) || 0) / count)
+function equalShare(member) {
+  const index = splitMembers.value.findIndex(item => item.uid === member.uid)
+  return money(shareValue(member, index))
 }
 
 watch(() => draft.transaction_type, type => {
@@ -474,7 +475,7 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
                 <input type="checkbox" :checked="participantSelected(member.uid)" :aria-label="`Incluir a ${member.name || member.email}`" @change="toggleParticipant(member.uid)" />
                 <span class="split-check" aria-hidden="true"><PhCheck :size="16" weight="bold" /></span>
                 <span class="split-member-name">{{ member.name || member.email }}<small v-if="member.uid === user?.uid">Tú</small></span>
-                <span v-if="draft.share_mode === 'equal'" class="split-member-amount">{{ equalShare() }}</span>
+                <span v-if="participantSelected(member.uid) && draft.share_mode === 'equal'" class="split-member-amount">{{ equalShare(member) }}</span>
                 <span v-else-if="participantSelected(member.uid)" class="money-input split-member-input">
                   <input v-model="draft.participant_shares[member.uid]" aria-describedby="expense-split-summary"
                          type="number" inputmode="decimal"

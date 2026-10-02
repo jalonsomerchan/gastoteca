@@ -30,6 +30,9 @@ export function useRecurring({
   function startRecurringRule(rule = null) {
     const payload = rule?.payload || {}
     const validParticipants = (payload.participant_uids || []).filter((uid) => memberOptions.value.some((member) => member.uid === uid))
+    const shareMode = ['equal', 'amount', 'percent'].includes(payload.share_mode)
+      ? payload.share_mode
+      : rule && Object.keys(payload.participant_shares || {}).length ? 'amount' : 'equal'
     Object.assign(recurringDraft, {
       id: rule?.id || '',
       transaction_type: payload.transaction_type || 'expense',
@@ -48,7 +51,7 @@ export function useRecurring({
       applies_to_all: payload.applies_to_all ?? true,
       participant_uids: validParticipants,
       participant_shares: Object.fromEntries(Object.entries(payload.participant_shares || {}).map(([uid, amount]) => [uid, Number(amount).toFixed(2)])),
-      share_mode: rule && Object.keys(payload.participant_shares || {}).length ? 'amount' : 'equal',
+      share_mode: shareMode,
       tags: [...(payload.tags || [])],
     })
     if (!recurringDraft.applies_to_all && !recurringDraft.participant_uids.length) recurringDraft.applies_to_all = true
@@ -59,16 +62,24 @@ export function useRecurring({
     const value = recurringDraft.participant_shares[member.uid]
     if (value !== undefined) return value
     const count = Math.max(1, recurringSplitMembers.value.length)
+    if (recurringDraft.share_mode === 'percent') {
+      const regularShare = Math.round(100 / count * 100) / 100
+      return (index === count - 1 ? 100 - regularShare * (count - 1) : regularShare).toFixed(2)
+    }
     const amount = Number(recurringDraft.amount) || 0
     return (index === count - 1 ? amount - (amount / count) * index : amount / count).toFixed(2)
   }
 
   function resetRecurringShares() {
     const members = recurringSplitMembers.value
-    const amount = Number(recurringDraft.amount) || 0
+    const percent = recurringDraft.share_mode === 'percent'
+    const total = percent ? 100 : Number(recurringDraft.amount) || 0
+    const regularShare = percent
+      ? Math.round(total / Math.max(1, members.length) * 100) / 100
+      : Math.round((total / Math.max(1, members.length)) * 100) / 100
     let used = 0
     recurringDraft.participant_shares = Object.fromEntries(members.map((member, index) => {
-      const share = index === members.length - 1 ? amount - used : Math.round((amount / Math.max(1, members.length)) * 100) / 100
+      const share = index === members.length - 1 ? total - used : regularShare
       used += share
       return [member.uid, Math.max(0, share).toFixed(2)]
     }))
@@ -76,7 +87,7 @@ export function useRecurring({
 
   function setRecurringShareMode(mode) {
     recurringDraft.share_mode = mode
-    if (mode === 'amount') resetRecurringShares()
+    if (mode !== 'equal') resetRecurringShares()
   }
 
   async function saveRecurring() {
@@ -94,8 +105,12 @@ export function useRecurring({
       error.value = 'Selecciona quién paga o recibe este movimiento.'
       return
     }
-    if (recurringDraft.share_mode === 'amount') {
-      error.value = splitValidation(recurringSplitMembers.value.map((member, index) => recurringShareValue(member, index)), recurringDraft.amount)
+    if (recurringDraft.share_mode !== 'equal') {
+      error.value = splitValidation(
+        recurringSplitMembers.value.map((member, index) => recurringShareValue(member, index)),
+        recurringDraft.share_mode === 'percent' ? 100 : recurringDraft.amount,
+        recurringDraft.share_mode === 'percent',
+      )
       if (error.value) return
     }
     const wasEditing = Boolean(recurringDraft.id)

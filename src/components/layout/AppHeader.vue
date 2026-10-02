@@ -21,6 +21,7 @@ const {
   markNotificationRead,
   markAllNotificationsRead,
   openNotification,
+  refreshExpenses,
 } = useGastotecaContext()
 
 const moreOpen = ref(false)
@@ -35,11 +36,19 @@ function closeMenu() {
   menuOpen.value = false
   moreOpen.value = false
 }
+
+function handleBrandClick(event) {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
+  menuOpen.value = false
+  moreOpen.value = false
+  notificationsOpen.value = false
+  refreshExpenses()
+}
 </script>
 
 <template>
   <header class="topbar">
-    <RouterLink class="brand" to="/" aria-label="La Gastoteca, ir a movimientos">
+    <RouterLink class="brand" to="/" aria-label="La Gastoteca, ir a movimientos" @click="handleBrandClick">
       <img class="brand-icon" :src="brandIconUrl" alt="" />
       <span><strong>La Gastoteca</strong><small>Cuentas claras, siempre</small></span>
     </RouterLink>
