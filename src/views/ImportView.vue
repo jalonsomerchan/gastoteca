@@ -12,7 +12,7 @@ import { syncTypedOption } from '../utils/selects.js'
 
 const {
   group,
-  user,
+  freshToken,
   stats,
   expenses,
   notice,
@@ -137,7 +137,7 @@ async function importSelected() {
   importProgress.value = 0
   let imported = 0
   try {
-    const token = await user.value.getIdToken(true)
+    const token = await freshToken(true)
     for (const movement of selectedMovements.value) {
       const data = await postJson('gastoteca/save_expense', token, payloadFor(movement))
       if (data.expenses) expenses.value = data.expenses

@@ -1,4 +1,3 @@
-const firebaseVersion = '12.6.0'
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
@@ -7,14 +6,13 @@ const config = {
 }
 let authPromise
 
-const load = (name) => import(/* @vite-ignore */ `https://www.gstatic.com/firebasejs/${firebaseVersion}/firebase-${name}.js`)
 export const hasFirebaseConfig = () => Boolean(config.apiKey && config.authDomain && config.appId)
 
 export async function getFirebaseAuth() {
-  authPromise ||= Promise.all([load('app'), load('auth')]).then(([appModule, authModule]) => {
+  authPromise ||= Promise.all([import('firebase/app'), import('firebase/auth')]).then(([appModule, authModule]) => {
     const app = appModule.getApps().length ? appModule.getApp() : appModule.initializeApp(config)
     return { auth: authModule.getAuth(app), authModule }
-  })
+  }).catch(reason => { authPromise = null; throw reason })
   return authPromise
 }
 

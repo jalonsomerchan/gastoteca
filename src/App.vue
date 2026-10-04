@@ -13,6 +13,7 @@ import ExpenseDialog from './components/dialogs/ExpenseDialog.vue'
 import SettlementDialog from './components/dialogs/SettlementDialog.vue'
 import IconPickerDialog from './components/dialogs/IconPickerDialog.vue'
 import DeleteDialogs from './components/dialogs/DeleteDialogs.vue'
+import OfflineStatus from './components/layout/OfflineStatus.vue'
 
 const application = useGastoteca()
 provideGastoteca(application)
@@ -31,6 +32,7 @@ const modalVisible = computed(() => application.modalOpen.value || application.d
     </main>
     <WelcomeScreen v-else-if="!user" />
     <main v-else id="main-content" tabindex="-1" :aria-busy="pageBusy" :aria-label="pageTitle">
+      <OfflineStatus />
       <div v-if="error && !modalVisible" class="page-error">
         <FormError :message="error" />
         <button v-if="routeLoadFailed" type="button" class="secondary" @click="retryRouteLoad">Volver a cargar</button>

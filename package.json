@@ -11,8 +11,11 @@
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {
+    "@iconify-icons/mdi": "^2.0.0",
     "@phosphor-icons/vue": "^2.2.1",
     "@vueform/multiselect": "^2.6.11",
+    "firebase": "^12.6.0",
+    "iconify-icon": "^3.0.0",
     "vue": "^3.5.40",
     "vue-router": "^5.2.0"
   },

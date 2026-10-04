@@ -14,22 +14,42 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest(path, token, options = {}) {
-  const response = await fetch(`${API_BASE}/${path.replace(/^\//, '')}`, {
-    ...options,
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
-    },
+let offlineClient = null
+export function setOfflineClient(client) { offlineClient = client }
+
+export async function networkRequest(path, token, options = {}) {
+  const controller = new AbortController()
+  const timeout = options.timeoutMs ?? (/send_backup|send_summary/.test(path) ? 60000 : 12000)
+  let timer
+  const deadline = new Promise((resolve, reject) => {
+    timer = setTimeout(() => { controller.abort(); reject(new ApiError('El servidor no responde. Inténtalo de nuevo.', 0, 'TIMEOUT')) }, timeout)
   })
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok || payload.ok === false) {
-    throw new ApiError(payload.message || `La API respondió con ${response.status}.`, response.status, payload.code)
-  }
-  return payload.data ?? payload
+  try {
+    const response = await Promise.race([fetch(`${API_BASE}/${path.replace(/^\//, '')}`, {
+      ...options,
+      signal: options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...options.headers,
+      },
+    }), deadline])
+    const payload = await Promise.race([response.json().catch(() => { throw new ApiError('El servidor no devolvió una respuesta válida.', response.ok ? 0 : response.status, 'INVALID_RESPONSE') }), deadline])
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !Object.keys(payload).length) throw new ApiError('El servidor no devolvió una respuesta válida.', response.ok ? 0 : response.status, 'INVALID_RESPONSE')
+    if (!response.ok || payload.ok === false) {
+      throw new ApiError(payload.message || `La API respondió con ${response.status}.`, response.status, payload.code)
+    }
+    return payload.data ?? payload
+  } catch (reason) {
+    if (reason instanceof ApiError) throw reason
+    throw new ApiError('No se pudo conectar con el servidor.', 0, 'NETWORK_ERROR')
+  } finally { clearTimeout(timer) }
 }
+
+export const apiRequest = (path, token, options = {}) => offlineClient
+  ? offlineClient.request(path, token, options)
+  : networkRequest(path, token, options)
 
 export const getJson = (path, token) => apiRequest(path, token)
 export const postJson = (path, token, body) =>

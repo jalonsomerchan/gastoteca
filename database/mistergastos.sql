@@ -313,5 +313,16 @@ CREATE TABLE IF NOT EXISTS mg_expense_history (
   CONSTRAINT fk_mg_expense_history_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS mg_offline_operations (
+  uid VARCHAR(128) NOT NULL,
+  operation_id CHAR(36) NOT NULL,
+  group_id BIGINT UNSIGNED NOT NULL,
+  request_hash CHAR(64) NOT NULL,
+  receipt LONGTEXT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (uid, operation_id),
+  KEY idx_mg_offline_group (group_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT INTO mg_schema_version (id, version) VALUES (1, 8)
 ON DUPLICATE KEY UPDATE version = VALUES(version);

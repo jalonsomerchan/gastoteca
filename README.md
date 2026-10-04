@@ -16,6 +16,7 @@ La configuración local ya contiene las mismas claves públicas de Firebase que 
 El controlador principal está en `/Applications/MAMP/htdocs/OV2/api/mistergastos.php`. La ruta pública de producción es `/gastoteca/*`; `/mistergastos/*` se mantiene como alias compatible. Todas las rutas requieren `Authorization: Bearer FIREBASE_ID_TOKEN`.
 
 - `GET /gastoteca/bootstrap`: grupo, gastos y estadísticas.
+- `POST /gastoteca/sync_operation`: aplica un cambio local con un identificador único, el grupo original y el cuerpo de la operación. La respuesta identifica los registros nuevos. Una repetición devuelve el recibo del primer guardado sin repetir movimientos, liquidaciones ni avisos.
 - `GET /gastoteca/expenses`: listado de gastos.
 - `GET /gastoteca/group`: datos del grupo y sus catálogos.
 - `POST /gastoteca/save_debt` y `POST /gastoteca/delete_debt`: crean, editan o eliminan deudas del grupo. Cada deuda contiene `concept`, `status` (`pending`, `paid` o `cancelled`), `source_uid` (persona a quien pagar), `target_uid` (persona que debe) y `amount`; para editar se envía también `id`. El listado viene en `group.debts`.
@@ -76,6 +77,18 @@ El workflow `.github/workflows/deploy.yml` ejecuta lint, genera la build, crea e
 
 En el repositorio de GitHub solo hay que seleccionar **GitHub Actions** como origen de Pages y crear el registro DNS `CNAME gastoteca → jalonsomerchan.github.io`. En Firebase Authentication debe figurar `gastoteca.alon.one` como dominio autorizado.
 
+## Uso sin conexión
+
+Después del primer acceso con conexión, la PWA prepara todas las pantallas y conserva en IndexedDB una copia del grupo, movimientos, estadísticas, liquidaciones, plantillas y ajustes. La copia y los cambios pendientes se separan por cuenta de Firebase y URL de API. Firebase, el componente de iconos y los iconos básicos forman parte de la build; las fuentes y los iconos consultados se conservan en la caché del service worker. El selector ofrece una colección básica cuando no hay red y todavía no se han descargado otras colecciones. El primer inicio de sesión necesita conexión. No se almacena ningún token en las copias de Gastoteca: la sesión sigue gestionada por Firebase.
+
+Sin conexión, ante un error de red, una respuesta inválida, un error temporal del servidor o después de 12 segundos sin respuesta, se utiliza la última copia local. Las operaciones de guardado se conservan antes de enviarse y se reflejan inmediatamente en movimientos, repartos, balance y estadísticas. Se pueden crear, editar y borrar movimientos y deudas, registrar liquidaciones, gestionar etiquetas, catálogos, presupuestos, recurrentes y plantillas, y guardar ajustes. Las recurrentes vencidas se materializan en el servidor al recuperar la conexión; el dispositivo no crea ocurrencias adicionales por su cuenta.
+
+El aviso de conexión muestra el número de cambios pendientes y permite reintentar o descargar una copia JSON. La sincronización se ejecuta en orden al recuperar conexión, al volver a la app, al abrirla de nuevo y cada 30 segundos mientras esté visible y haya cambios pendientes o el servidor no responda. Para sincronizar hay que tener la app abierta y una sesión válida. Si el almacenamiento local no permite guardar un cambio, el editor conserva el borrador y muestra el error. Los envíos de Telegram, invitaciones, conexión con Telegram y cambios de grupo necesitan un servidor disponible; no se encolan. Tampoco se puede cambiar de grupo con cambios pendientes.
+
+La API mantiene la validación y los permisos de los endpoints actuales. El cambio y su recibo se confirman en la misma transacción; reintentar después de perder una respuesta no duplica datos. Si el grupo ha cambiado o un movimiento editado ha sido modificado en otro dispositivo, se detiene la cola y se conserva para revisión. Se puede descargar antes de descartarla explícitamente y volver a aplicar los cambios sobre los datos actuales. Los errores de autenticación y de validación no se sustituyen por respuestas de caché. Las copias locales permanecen en ese navegador; borrar sus datos también elimina los cambios que aún no se hayan sincronizado.
+
+Para producción, desplegar primero `api/GastotecaOffline.php` y la versión actualizada de `api/mistergastos.php`, además de sus dependencias existentes, y después el frontend. La migración automática 14 añade únicamente `mg_offline_operations` al esquema 13, sin modificar el historial. El frontend reconoce `offline_sync_version` en el bootstrap; con un backend anterior mantiene las peticiones y guardados online actuales y no reintenta automáticamente una escritura cuyo resultado es incierto. No hace falta un cron nuevo. Las actualizaciones del service worker se activan al cerrar las pestañas de la versión anterior; la caché incluye los módulos de todas las rutas y conserva la build anterior para sus importaciones diferidas.
+
 ## Estructura del frontend
 
 - `src/App.vue`: estructura general, estado de carga y montaje de vistas y diálogos.
@@ -108,11 +121,16 @@ php tests/debts-api.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
 php tests/backups-api.test.php /Applications/MAMP/htdocs/OV2/api/GastotecaBackups.php
 php tests/backup-controller.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
 php tests/summaries-api.test.php /Applications/MAMP/htdocs/OV2/api/GastotecaBackups.php
+php tests/offline-api.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
 ```
 
 Las pruebas de resúmenes también ejecutan las consultas de rankings y saldo contra SQLite en memoria; requieren la extensión PHP `pdo_sqlite` y no acceden a datos reales.
 
 Las pruebas usan el ejecutor de Node y Vite para cargar componentes Vue, sin dependencias de pruebas adicionales. Cubren balances y liquidaciones, sugerencias, aislamiento del estado, reparto, contratos de guardado y borrado, errores de API y renderizado de las diez rutas y los diálogos. Las peticiones de las pruebas de operaciones están simuladas: no requieren Firebase ni modifican datos reales. El workflow ejecuta las pruebas antes de generar la build.
+
+`tests/offline.test.js` cubre recarga, indisponibilidad del servidor, persistencia de la cola, identificadores temporales, reintentos, conflictos, aislamiento de cuentas, almacenamiento lleno y compatibilidad con la API anterior. `tests/offline-api.test.php` comprueba validación, recibos atómicos, rollback, repetición sin duplicados y cambios de grupo con almacenamiento simulado.
+
+La prueba opcional de navegador utiliza Playwright y una cuenta ficticia; no accede a datos reales. Con Playwright y Chromium disponibles, ejecutar `npm run build`, `npm run preview -- --host 127.0.0.1 --port 4173` y, en otro terminal, `node tests/offline-browser.mjs`. Se pueden configurar `PLAYWRIGHT_PACKAGE` para el paquete instalado, `BROWSER_EXECUTABLE` para un Chrome disponible y `TEST_PREVIEW_URL` para otro puerto. Comprueba guardado y recarga sin red, las 13 rutas adicionales, escritorio/móvil, sincronización y un fallo HTTP 503.
 
 ## Accesibilidad y uso
 

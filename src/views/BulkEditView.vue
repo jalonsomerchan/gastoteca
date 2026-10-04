@@ -12,7 +12,7 @@ import { syncTypedOption } from '../utils/selects.js'
 const {
   expenses,
   group,
-  user,
+  freshToken,
   memberOptions,
   stats,
   notice,
@@ -171,7 +171,7 @@ async function saveBulkEdit() {
   const targets = selectedExpenses.value.map(expense => ({ ...expense, tags: [...(expense.tags || [])], participant_uids: [...(expense.participant_uids || [])], participants: [...(expense.participants || [])] }))
   let applied = 0
   try {
-    const token = await user.value.getIdToken(true)
+    const token = await freshToken(true)
     for (const expense of targets) {
       const data = await postJson('gastoteca/save_expense', token, payloadFor(expense))
       if (data.expenses) expenses.value = data.expenses

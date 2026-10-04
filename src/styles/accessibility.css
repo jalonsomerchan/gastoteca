@@ -143,3 +143,10 @@ input[type='checkbox'], input[type='radio'] { flex-shrink: 0; }
 .expense-main .expense-details { display: block; overflow: visible; text-overflow: clip; white-space: normal; }
 .expense-main .expense-details-imported { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dialog-host .modal-title { font-size: clamp(1.35rem, 4vw, 2rem); }
+.offline-status { display:flex; align-items:flex-start; gap:12px; padding:14px 0; margin-bottom:24px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:var(--ink); }
+.offline-status>svg { flex-shrink:0; margin-top:2px; color:var(--green); }
+.offline-status-copy { flex:1; min-width:0; }
+.offline-status-copy strong { font-size:14px; }
+.offline-status-copy p { margin:4px 0 0; font-size:13px; line-height:1.5; overflow-wrap:anywhere; color:var(--muted); }
+.offline-status-actions { display:flex; flex-shrink:0; gap:4px; }
+@media (max-width:580px) { .offline-status { flex-wrap:wrap; gap:10px; }.offline-status-copy { flex-basis:calc(100% - 35px); }.offline-status-actions { margin-left:31px; } }

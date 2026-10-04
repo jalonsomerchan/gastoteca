@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { computed, ref, watch, onBeforeUnmount, onMounted } from 'vue'
 import { notificationOptions, paymentMethods, paymentMethodLabel } from '../domain/catalogs.js'
 import { money, dateLabel, notificationDateLabel, monthLabel, expenseLocation } from '../utils/formatters.js'
-import { getJson, postJson } from '../lib/api.js'
+import { ApiError, getJson, postJson } from '../lib/api.js'
 import { signInWithGoogle, hasFirebaseConfig, observeAuth, signOut } from '../lib/firebase.js'
 import { navigationItems, moreNavigationItems } from '../config/navigation.js'
 import { useIconPicker } from './useIconPicker.js'
@@ -22,6 +22,7 @@ import { useNotificationSettings } from './useNotificationSettings.js'
 import { useBackups } from './useBackups.js'
 import { useSummaries, summaryOptions } from './useSummaries.js'
 import { useGroup } from './useGroup.js'
+import { useOffline } from './useOffline.js'
 
 // One instance per application. Feature modules receive explicit reactive dependencies.
 export function useGastoteca() {
@@ -113,6 +114,9 @@ export function useGastoteca() {
   let unsubscribeAuth = null
   let disposed = false
   let noticeTimer = null
+  const { offline, startOffline, stopOffline, prepareOfflineData, syncOffline, exportOfflineChanges, discardOfflineChanges } = useOffline({
+    user, group, expenses, settlements, stats, quickExpenseTemplates, notifications, unreadNotificationCount, freshToken, error,
+  })
 
   const filteredExpenses = computed(() => expenses.value.filter((expense) => {
     const term = filters.search.trim().toLowerCase()
@@ -361,10 +365,26 @@ export function useGastoteca() {
 
   // Location is requested only from the explicit 'Usar mi ubicación' action.
 
-  async function freshToken(force = false) {
+  async function freshToken(force = false, requireNetwork = false) {
     if (!user.value) throw new Error('Debes iniciar sesión.')
-    token.value = await user.value.getIdToken(force)
-    return token.value
+    if (!requireNetwork && (navigator.onLine === false || offline.serverUnavailable)) return token.value || user.value.accessToken || `offline:${user.value.uid}`
+    const requestedUser = user.value
+    let timer
+    try {
+      const value = await Promise.race([
+        requestedUser.getIdToken(force),
+        new Promise((resolve, reject) => { timer = setTimeout(() => reject(new ApiError('No se pudo renovar la sesión. Se reintentará al recuperar la conexión.', 0, 'AUTH_NETWORK_ERROR')), 12000) }),
+      ])
+      if (user.value?.uid !== requestedUser.uid) throw new Error('La sesión ha cambiado.')
+      token.value = value
+      return value
+    } catch (reason) {
+      if (reason.code === 'auth/network-request-failed' || reason.status === 0) {
+        if (!requireNetwork) return token.value || requestedUser.accessToken || `offline:${requestedUser.uid}`
+        throw new ApiError(reason.message, 0, 'AUTH_NETWORK_ERROR')
+      }
+      throw reason
+    } finally { clearTimeout(timer) }
   }
 
   async function loadRouteData(routeName) {
@@ -398,10 +418,9 @@ export function useGastoteca() {
           getJson('gastoteca/summary_settings', authToken),
         ]) : Promise.resolve(null)
 
-      const requestData = await Promise.all(requests)
+      const [requestData, featureData] = await Promise.all([Promise.all(requests), featureRequest])
       const groupData = requestData[0]
       const pageData = requestData[1]
-      const featureData = await featureRequest
       if (requestId !== routeDataRequestId || route.name !== routeName || !user.value) return
 
       group.value = groupData.group
@@ -513,16 +532,27 @@ export function useGastoteca() {
 
   onBeforeUnmount(() => {
     disposed = true
+    stopOffline()
     unsubscribeAuth?.()
     window.clearTimeout(noticeTimer)
     expenseObserver?.disconnect()
     window.clearInterval(notificationsPollTimer)
     window.removeEventListener('keydown', handleHeaderEscape)
+    window.removeEventListener('online', handleConnectionChange)
+    window.removeEventListener('offline', handleConnectionChange)
     document.removeEventListener('visibilitychange', refreshNotificationsWhenVisible)
   })
 
   function refreshNotificationsWhenVisible() {
-    if (document.visibilityState === 'visible' && user.value) loadNotifications()
+    if (document.visibilityState === 'visible' && user.value) {
+      loadNotifications()
+      if (offline.pending || offline.serverUnavailable) syncOffline()
+    }
+  }
+
+  function handleConnectionChange() {
+    offline.offline = navigator.onLine === false
+    if (!offline.offline && user.value) syncOffline().then(() => prepareOfflineData())
   }
 
   function dismissHeaderMenu() {
@@ -568,9 +598,15 @@ export function useGastoteca() {
 
   onMounted(async () => {
     window.addEventListener('keydown', handleHeaderEscape)
+    window.addEventListener('online', handleConnectionChange)
+    window.addEventListener('offline', handleConnectionChange)
+    if ('serviceWorker' in navigator) navigator.serviceWorker.ready.then(() => { if (!disposed) offline.shellReady = true }).catch(() => {})
     document.addEventListener('visibilitychange', refreshNotificationsWhenVisible)
     notificationsPollTimer = window.setInterval(() => {
-      if (document.visibilityState === 'visible' && user.value) loadNotifications()
+      if (document.visibilityState === 'visible' && user.value) {
+        loadNotifications()
+        if (offline.pending || offline.serverUnavailable) syncOffline()
+      }
     }, 30000)
     if (!hasFirebaseConfig()) {
       error.value = 'Falta configurar Firebase en .env.local.'
@@ -580,11 +616,23 @@ export function useGastoteca() {
     try {
       unsubscribeAuth = await observeAuth(async (firebaseUser) => {
         if (disposed) return
+        if (user.value?.uid !== firebaseUser?.uid) token.value = ''
         user.value = firebaseUser
         error.value = ''
         if (firebaseUser) {
+          const cached = await startOffline()
+          if (disposed || user.value?.uid !== firebaseUser.uid) return
+          if (cached?.group) {
+            applyBackupSettings(cached.backup_settings)
+            applySummarySettings(cached.summary_settings)
+            loading.value = false
+          }
+          await prepareOfflineData()
+          if (disposed || user.value?.uid !== firebaseUser.uid) return
           await loadRouteData(route.name)
         } else {
+          stopOffline()
+          token.value = ''
           routeDataRequestId += 1
           routeLoading.value = false
           expenses.value = []
@@ -607,6 +655,11 @@ export function useGastoteca() {
     }
   })
   return {
+    offline,
+    freshToken,
+    syncOffline,
+    exportOfflineChanges,
+    discardOfflineChanges,
     routeLoadFailed,
     retryRouteLoad: () => loadRouteData(route.name),
     refreshExpenses,

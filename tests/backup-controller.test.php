@@ -11,7 +11,7 @@ class BackupControllerConnection extends TemplateTestConnection
     public $version = 10;
     public $schemaWrites = array();
     public function query($sql) {
-        if (strpos($sql, 'CREATE TABLE IF NOT EXISTS mg_schema_version') === 0 || strpos($sql, 'CREATE TABLE IF NOT EXISTS mg_backup_preferences') === 0 || strpos($sql, 'CREATE TABLE IF NOT EXISTS mg_summary_preferences') === 0 || strpos($sql, 'CREATE TABLE IF NOT EXISTS mg_debts') === 0) {
+        if (strpos($sql, 'CREATE TABLE IF NOT EXISTS mg_schema_version') === 0 || strpos($sql, 'CREATE TABLE IF NOT EXISTS mg_backup_preferences') === 0 || strpos($sql, 'CREATE TABLE IF NOT EXISTS mg_summary_preferences') === 0 || strpos($sql, 'CREATE TABLE IF NOT EXISTS mg_debts') === 0 || strpos($sql, 'CREATE TABLE IF NOT EXISTS mg_offline_operations') === 0) {
             $this->schemaWrites[] = $sql;
             return true;
         }
@@ -22,7 +22,7 @@ class BackupControllerConnection extends TemplateTestConnection
     public function execute($sql, $values) {
         if (strpos($sql, 'SELECT GET_LOCK') === 0) return array(array('acquired' => 1));
         if (strpos($sql, 'SELECT RELEASE_LOCK') === 0) return array();
-        if (strpos($sql, 'INSERT INTO mg_schema_version') === 0) { $this->version = 13; return array(); }
+        if (strpos($sql, 'INSERT INTO mg_schema_version') === 0) { $this->version = 14; return array(); }
         if (strpos($sql, 'SELECT e.id,e.transaction_type') === 0) {
             check($values === array(1, 'alice'), 'Expense query must use the authenticated group and uid');
             check(strpos($sql, 'WHERE e.group_id=? AND (e.confirmed_at IS NOT NULL OR e.created_by=?)') !== false, 'Backup reader must hide other authors pending movements');
@@ -40,17 +40,19 @@ $api = apiFor('alice', $storage);
 $class = new ReflectionClass('mistergastos');
 $database = $class->getProperty('databaseName'); $database->setAccessible(true); $database->setValue($api, 'test');
 $migrate = $class->getMethod('ensureTables'); $migrate->setAccessible(true); $migrate->invoke($api);
-check($storage->version === 13, 'Schema 10 must migrate to 13');
-check(count($storage->schemaWrites) === 4 && strpos($storage->schemaWrites[1], 'mg_backup_preferences') !== false && strpos($storage->schemaWrites[2], 'mg_summary_preferences') !== false && strpos($storage->schemaWrites[3], 'mg_debts') !== false, 'Upgrade must only add schedules and debts, without rerunning legacy data migrations');
+check($storage->version === 14, 'Schema 10 must migrate to 14');
+check(count($storage->schemaWrites) === 5 && strpos($storage->schemaWrites[1], 'mg_backup_preferences') !== false && strpos($storage->schemaWrites[2], 'mg_summary_preferences') !== false && strpos($storage->schemaWrites[3], 'mg_debts') !== false && strpos($storage->schemaWrites[4], 'mg_offline_operations') !== false, 'Upgrade must add schedules, debts and receipts without rerunning legacy data migrations');
 check(strpos($storage->schemaWrites[1], 'REFERENCES mg_group_members(group_id,uid) ON DELETE CASCADE') !== false, 'Leaving a group must remove its backup schedule');
 $storage->schemaWrites = array(); $migrate->invoke($api);
 check(count($storage->schemaWrites) === 1, 'Current schema must skip migration');
 $storage->version = 11; $storage->schemaWrites = array(); $migrate->invoke($api);
-check(count($storage->schemaWrites) === 3 && strpos($storage->schemaWrites[1], 'mg_summary_preferences') !== false && strpos($storage->schemaWrites[2], 'mg_debts') !== false, 'Schema 11 only adds summaries and debts and preserves existing backups');
+check(count($storage->schemaWrites) === 4 && strpos($storage->schemaWrites[1], 'mg_summary_preferences') !== false && strpos($storage->schemaWrites[2], 'mg_debts') !== false && strpos($storage->schemaWrites[3], 'mg_offline_operations') !== false, 'Schema 11 adds summaries, debts and receipts and preserves existing backups');
 check(strpos($storage->schemaWrites[1], 'REFERENCES mg_group_members(group_id,uid) ON DELETE CASCADE') !== false, 'Leaving a group removes its summary schedules');
 $storage->version = 12; $storage->schemaWrites = array(); $migrate->invoke($api);
-check($storage->version === 13 && count($storage->schemaWrites) === 2 && strpos($storage->schemaWrites[1], 'mg_debts') !== false, 'Schema 12 only adds debts');
+check($storage->version === 14 && count($storage->schemaWrites) === 3 && strpos($storage->schemaWrites[1], 'mg_debts') !== false && strpos($storage->schemaWrites[2], 'mg_offline_operations') !== false, 'Schema 12 adds debts and receipts');
 check(strpos($storage->schemaWrites[1], 'REFERENCES mg_groups(id) ON DELETE CASCADE') !== false && strpos($storage->schemaWrites[1], 'REFERENCES mg_group_members') === false, 'Debts belong to their group and survive a person leaving');
+$storage->version = 13; $storage->schemaWrites = array(); $migrate->invoke($api);
+check($storage->version === 14 && count($storage->schemaWrites) === 2 && strpos($storage->schemaWrites[1], 'mg_offline_operations') !== false, 'Schema 13 only adds synchronization receipts');
 $reader = $class->getMethod('getExpenses'); $reader->setAccessible(true); $expenses = $reader->invoke($api, 1, 'alice');
 check(count($expenses) === 2 && $expenses[1]['confirmation_pending'], 'Real controller returns shared and own pending movements for backup');
 

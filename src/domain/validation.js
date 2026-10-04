@@ -1,3 +1,10 @@
+export function equalShareCents(amount, count, index) {
+  const totalCents = Math.round((Number(amount) || 0) * 100)
+  if (count <= 0) return totalCents
+  const regularShare = Math.round(totalCents / count)
+  return index === count - 1 ? totalCents - regularShare * (count - 1) : regularShare
+}
+
 export function isPositiveAmount(value) {
   const amount = Number(value)
   return Number.isFinite(amount) && amount > 0 && amount <= 99999999

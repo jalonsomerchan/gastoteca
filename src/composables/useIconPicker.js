@@ -1,4 +1,5 @@
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { offlineIconResponse } from '../domain/offlineIcons.js'
 
 export function useIconPicker() {
   const iconPickerOpen = ref(false)
@@ -56,9 +57,16 @@ export function useIconPicker() {
   const iconPickerSearchCollections = computed(() => Object.fromEntries(iconPickerCollections.value.map((item) => [item.prefix, item.name])))
 
   async function iconifyJson(path) {
-    const response = await fetch(`https://api.iconify.design/${path}`)
-    if (!response.ok) throw new Error('No se pudo cargar la biblioteca de iconos. Inténtalo de nuevo.')
-    return response.json()
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 5000)
+    try {
+      const response = await fetch(`https://api.iconify.design/${path}`, { signal: controller.signal })
+      if (!response.ok) throw new Error('No se pudo cargar la biblioteca de iconos. Inténtalo de nuevo.')
+      return await response.json()
+    } catch (reason) {
+      if (globalThis.navigator?.onLine === false) return offlineIconResponse(path)
+      throw reason
+    } finally { clearTimeout(timer) }
   }
 
   async function loadIconPickerCollection(prefix) {

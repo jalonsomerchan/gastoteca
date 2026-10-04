@@ -1,15 +1,8 @@
-import { isPositiveAmount, splitValidation } from '../domain/validation.js'
+import { isPositiveAmount, splitValidation, equalShareCents } from '../domain/validation.js'
 import { postJson } from '../lib/api.js'
 import { historyFieldLabels, paymentMethodLabel } from '../domain/catalogs.js'
 import { money, dateLabel, normalizeName } from '../utils/formatters.js'
 import { computed, nextTick } from 'vue'
-
-function equalShareCents(amount, count, index) {
-  const totalCents = Math.round((Number(amount) || 0) * 100)
-  if (count <= 0) return totalCents
-  const regularShare = Math.round(totalCents / count)
-  return index === count - 1 ? totalCents - regularShare * (count - 1) : regularShare
-}
 
 function hasEqualParticipantShares(expense) {
   const participants = expense.participants || []
