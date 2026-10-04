@@ -81,7 +81,7 @@ export function projectOffline(document, uid) {
   snapshot.settlements ||= []
   for (const operation of document.queue || []) {
     const body = resolveReferences(operation.body, document.mappings || {})
-    const id = body.id || operation.localId
+    const id = resolveReferences(body.id || operation.localId, document.mappings || {})
     const action = operation.action
     if (action === 'save_expense') {
       const previous = snapshot.expenses.find(item => item.id === id)
@@ -149,5 +149,14 @@ export function projectOffline(document, uid) {
     snapshot.stats = localStatistics(snapshot.expenses)
     ;(group.budgets || []).forEach(item => { item.current_total = snapshot.expenses.filter(expense => !expense.confirmation_pending && expense.transaction_type === 'expense' && expense.category === item.category && expense.occurred_at.slice(0, 7) === currentMonth()).reduce((total, expense) => total + cents(expense.amount), 0) / 100 })
   }
+  return snapshot
+}
+
+export function acknowledgeOfflineOperation(document, operation, uid) {
+  const snapshot = projectOffline({ ...document, queue: [operation] }, uid)
+  for (const items of [snapshot.expenses, snapshot.settlements, snapshot.group?.debts, snapshot.group?.recurring]) {
+    for (const item of items || []) delete item.offline_pending
+  }
+  if (snapshot.new_expense_ids) snapshot.new_expense_ids = resolveReferences(snapshot.new_expense_ids, document.mappings || {})
   return snapshot
 }

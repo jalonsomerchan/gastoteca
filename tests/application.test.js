@@ -815,6 +815,30 @@ test('expense filters are labelled and empty results keep their main heading', a
   assert.match(html, /Añadir el primer movimiento/)
 })
 
+test('device expenses stay visible outside filters and pagination without duplicate cards', async () => {
+  for (const filtered of [false, true]) {
+    const html = await renderComponent('/src/views/ExpensesView.vue', 'expenses', app => {
+      app.expenses.value = [
+        ...Array.from({ length: 25 }, (_, index) => ({ ...expense, id: index + 1, name: `Confirmado ${index}` })),
+        { ...expense, id: 'local-pending', name: 'Compra en el dispositivo', offline_pending: true },
+      ]
+      if (filtered) Object.assign(app.filters, { search: 'Sin coincidencias', category: 'home', from: '2026-10-01' })
+    })
+    assert.match(html, /Pendientes de sincronizar/)
+    assert.match(html, /Guardado en este dispositivo/)
+    assert.equal((html.match(/aria-label="Editar movimiento: Compra en el dispositivo"/g) || []).length, 1)
+    assert.match(html, filtered ? /No hay resultados/ : /Mostrar más movimientos/)
+  }
+})
+
+test('a list with only pending expenses does not say that the first expense is missing', async () => {
+  const html = await renderComponent('/src/views/ExpensesView.vue', 'expenses', app => {
+    app.expenses.value = [{ ...expense, id: 'local-pending', offline_pending: true }]
+  })
+  assert.match(html, /Pendientes de sincronizar/)
+  assert.doesNotMatch(html, /No hay resultados|Tu primer gasto empieza aquí/)
+})
+
 test('expense comboboxes use unique ids and distinguish field labels', async () => {
   const html = await renderComponent('/src/components/dialogs/ExpenseDialog.vue', 'expenses', app => app.openExpense(expense))
   for (const field of ['category', 'place', 'city']) {

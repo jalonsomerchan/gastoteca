@@ -127,6 +127,48 @@ test('a lost server response keeps the same operation id when the app reopens', 
   assert.equal((await f.storage.read()).queue.length, 0)
 })
 
+test('a replayed receipt keeps the acknowledged expense visible even if the next read fails', async () => {
+  const f = fixture()
+  await prepare(f)
+  f.state.online = false
+  await post(f.client, 'save_expense', { ...draft, name: 'Respuesta perdida' })
+  f.client.stop()
+  const reopened = fixture({ storage: f.storage, transport: async path => {
+    if (path === 'gastoteca/sync_operation') return { entity_id: 44, data: {}, replayed: true }
+    throw failure(503)
+  } })
+  await reopened.client.retry()
+  const snapshot = await reopened.client.refresh()
+  assert.equal((await f.storage.read()).queue.length, 0)
+  assert.equal(snapshot.expenses.find(item => item.id === 44)?.name, 'Respuesta perdida')
+  assert.equal(snapshot.expenses.find(item => item.id === 44)?.offline_pending, undefined)
+  assert.equal(snapshot.stats.total, 60.02)
+})
+
+test('a replayed creation stays visible and dependent edits use its real id even when another change conflicts', async () => {
+  const requests = []
+  const f = fixture()
+  await prepare(f)
+  f.state.online = false
+  const created = await post(f.client, 'save_expense', { ...draft, name: 'Original' })
+  await post(f.client, 'save_expense', { ...draft, id: created.expenses[0].id, name: 'Editado pendiente' })
+  f.client.stop()
+  const reopened = fixture({ storage: f.storage, transport: async (path, token, options) => {
+    assert.equal(path, 'gastoteca/sync_operation')
+    requests.push(JSON.parse(options.body))
+    if (requests.length === 1) return { entity_id: 44, data: {}, replayed: true }
+    throw failure(409, 'Revisar edición', 'OFFLINE_CONFLICT')
+  } })
+  await reopened.client.retry()
+  const document = await f.storage.read()
+  assert.equal(document.queue.length, 1)
+  assert.equal(requests[1].body.id, 44)
+  assert.equal(document.snapshot.expenses.find(item => item.id === 44)?.name, 'Original')
+  const snapshot = await reopened.client.refresh()
+  assert.equal(snapshot.expenses.find(item => item.id === 44)?.name, 'Editado pendiente')
+  assert.equal(snapshot.expenses.filter(item => item.name.includes('pendiente')).length, 1)
+})
+
 test('server conflicts retain the failed operation and every subsequent change', async () => {
   const f = fixture({ transport: async path => {
     if (path === 'gastoteca/bootstrap') return { group, expenses: [expense], offline_sync_version: 1 }
@@ -245,6 +287,41 @@ test('late reads cannot overwrite changes made while the request was in flight',
   resolveRead({ expenses: [expense] })
   const loaded = await loading
   assert.equal(loaded.expenses.length, 2)
+})
+
+test('failed late reads return the latest pending changes, not the snapshot at request start', async () => {
+  let rejectRead
+  const f = fixture({ transport: async path => {
+    if (path === 'gastoteca/bootstrap') return { group, expenses: [expense], offline_sync_version: 1 }
+    return new Promise((resolve, reject) => { rejectRead = reject })
+  } })
+  await prepare(f)
+  const loading = f.client.request('gastoteca/expenses', 'token')
+  await new Promise(resolve => setImmediate(resolve))
+  f.state.online = false
+  await post(f.client, 'save_expense', { ...draft, name: 'Guardado mientras cargaba' })
+  rejectRead(failure(503))
+  assert.equal((await loading).expenses[0].name, 'Guardado mientras cargaba')
+  assert.equal(f.state.statuses.at(-1).snapshot.expenses.length, 2)
+})
+
+test('a late retry bootstrap cannot erase an expense acknowledged while the read was in flight', async () => {
+  let resolveBootstrap
+  let prepared = false
+  const f = fixture({ transport: async path => {
+    if (path === 'gastoteca/bootstrap') {
+      if (!prepared) { prepared = true; return { group, expenses: [expense], offline_sync_version: 1 } }
+      return new Promise(resolve => { resolveBootstrap = resolve })
+    }
+    return { entity_id: 44, data: { group, expenses: [movementFromDraft({ ...draft, name: 'Nuevo confirmado' }, group, 'alice', 44), expense] } }
+  } })
+  await prepare(f)
+  const retry = f.client.retry()
+  await new Promise(resolve => setImmediate(resolve))
+  await post(f.client, 'save_expense', { ...draft, name: 'Nuevo confirmado' })
+  resolveBootstrap({ group, expenses: [expense] })
+  await retry
+  assert.equal((await f.client.refresh()).expenses.find(item => item.id === 44)?.name, 'Nuevo confirmado')
 })
 
 test('all standard category icons and a searchable picker remain available without a CDN', () => {

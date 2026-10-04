@@ -1,4 +1,4 @@
-import { offlineActions, projectOffline, resolveReferences } from '../domain/offline.js'
+import { offlineActions, projectOffline, resolveReferences, acknowledgeOfflineOperation } from '../domain/offline.js'
 
 const clone = value => structuredClone(value)
 const unavailable = reason => reason.status === 0 || reason.status >= 500 || reason.status === 408 || reason.status === 429
@@ -114,6 +114,8 @@ export function createOfflineClient({ uid, storage, transport, getToken, isOnlin
             if (!current.queue.some(item => item.id === operation.id)) return current
             if (operation.localId && result.entity_id !== null && result.entity_id !== undefined) current.mappings[operation.localId] = result.entity_id
             for (const tag of result.data?.group?.tags || []) current.mappings[`tag-${operation.id}-${tag.name}`] = tag.id
+            // Replayed receipts may omit the data: persist the acknowledged change before removing it.
+            current.snapshot = acknowledgeOfflineOperation(current, operation, uid)
             current.queue = current.queue.filter(item => item.id !== operation.id)
             current.revision = (current.revision || 0) + 1
             merge(current, `gastoteca/${operation.action}`, result.data || {})
@@ -185,6 +187,7 @@ export function createOfflineClient({ uid, storage, transport, getToken, isOnlin
       return data
     } catch (reason) {
       if (mutation || !unavailable(reason)) throw reason
+      document = await read()
       publish(document)
       return cached(document, path, options)
     }
@@ -199,7 +202,8 @@ export function createOfflineClient({ uid, storage, transport, getToken, isOnlin
     if (!document.queue.length) {
       try {
         const data = await network('gastoteca/bootstrap', await getToken(), {})
-        await update(current => merge(current, 'gastoteca/bootstrap', data))
+        if (stopped) return
+        await update(current => (current.revision || 0) !== (document.revision || 0) ? current : merge(current, 'gastoteca/bootstrap', data))
       } catch (reason) { publish(await read(), unavailable(reason) ? '' : reason.message) }
     }
   }

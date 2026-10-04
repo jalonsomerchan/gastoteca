@@ -15,6 +15,8 @@ let expenses = []
 let nextId = 1
 let requests = 0
 let outage = false
+let delayWarmup = false
+const delayedRoutes = []
 const receipts = new Map()
 const token = () => {
   const now = Math.floor(Date.now() / 1000)
@@ -29,6 +31,10 @@ await context.route('https://alon.one/api/**', async route => {
   requests++
   if (outage) return route.fulfill({ status: 503, json: { ok: false, message: 'Servidor en mantenimiento.' } })
   const action = new URL(route.request().url()).pathname.split('/').pop()
+  if (delayWarmup && ['backup_settings', 'summary_settings'].includes(action)) {
+    delayedRoutes.push(route)
+    return
+  }
   let data
   if (action === 'sync_operation') {
     const operation = route.request().postDataJSON()
@@ -73,6 +79,12 @@ try {
   await page.locator('dialog[open] input[type="number"]').first().fill('12.34')
   await page.getByRole('button', { name: 'Guardar', exact: true }).click()
   await page.getByText('Compra offline en navegador', { exact: true }).waitFor()
+  await page.getByRole('heading', { name: /Pendientes de sincronizar/ }).waitFor()
+  await page.getByRole('button', { name: /Filtros/ }).click()
+  await page.getByLabel('Buscar movimientos', { exact: true }).fill('Un filtro que no coincide')
+  await page.getByText('Compra offline en navegador', { exact: true }).waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Editar movimiento: Compra offline en navegador', exact: true }).count(), 1)
+  await page.getByRole('button', { name: 'Limpiar filtros', exact: true }).first().click()
   await page.waitForFunction(() => document.querySelector('.category-icon iconify-icon')?.shadowRoot?.querySelector('svg'))
   await page.getByText(/1 cambio guardado en este dispositivo/).waitFor()
   await page.reload()
@@ -114,10 +126,32 @@ try {
   await page.getByText(/1 cambio guardado en este dispositivo/).waitFor()
   assert.equal(expenses.length, 1)
   outage = false
-  await page.getByRole('button', { name: 'Reintentar conexión y sincronizar', exact: true }).click()
+  await page.getByRole('link', { name: 'La Gastoteca, ir a movimientos', exact: true }).click()
   await page.getByText(/cambio guardado en este dispositivo/).waitFor({ state: 'hidden' })
   assert.equal(expenses.length, 2)
   assert.equal(receipts.size, 2)
+  outage = true
+  await page.reload()
+  await page.getByText('El servidor no responde', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Nuevo movimiento', exact: true }).click()
+  await page.locator('label').filter({ has: page.getByRole('radio', { name: 'Gasto Dinero que ha salido', exact: true }) }).click()
+  await page.getByLabel('Nombre del gasto', { exact: true }).fill('Pendiente al volver a abrir')
+  await page.locator('dialog[open] input[type="number"]').first().fill('6.15')
+  await page.getByRole('button', { name: 'Guardar', exact: true }).click()
+  await page.getByText('Pendiente al volver a abrir', { exact: true }).waitFor()
+  await page.getByText(/1 cambio guardado en este dispositivo/).waitFor()
+  await page.close()
+  outage = false
+  delayWarmup = true
+  const reopened = await context.newPage()
+  reopened.on('pageerror', error => messages.push(error.message))
+  await reopened.goto(base)
+  await reopened.getByText('Pendiente al volver a abrir', { exact: true }).waitFor({ timeout: 5000 })
+  await reopened.getByText(/cambio guardado en este dispositivo/).waitFor({ state: 'hidden', timeout: 5000 })
+  assert.equal(expenses.length, 3)
+  assert.equal(receipts.size, 3)
+  delayWarmup = false
+  for (const route of delayedRoutes) await route.fulfill({ json: { ok: true, data: {} } })
   assert.deepEqual(messages, [])
   console.log(JSON.stringify({ passed: true, apiRequests: requests, uniqueMutations: receipts.size, offlineRoutes: 13, screenshots: ['/private/tmp/gastoteca-offline-desktop.png', '/private/tmp/gastoteca-offline-mobile.png'] }))
 } finally { await context.close(); await browser.close() }

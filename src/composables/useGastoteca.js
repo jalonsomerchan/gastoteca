@@ -128,13 +128,13 @@ export function useGastoteca() {
 
   const visibleExpenses = computed(() => {
     const newlySeenIds = new Set(newExpenseIds.value)
-    const newExpenses = filteredExpenses.value.filter((expense) => newlySeenIds.has(expense.id))
-    const previouslySeenExpenses = filteredExpenses.value.filter((expense) => !newlySeenIds.has(expense.id))
+    const newExpenses = filteredExpenses.value.filter((expense) => !expense.offline_pending && newlySeenIds.has(expense.id))
+    const previouslySeenExpenses = filteredExpenses.value.filter((expense) => !expense.offline_pending && !newlySeenIds.has(expense.id))
     return [...newExpenses, ...previouslySeenExpenses.slice(0, visibleExpenseCount.value)]
   })
   const hasMoreExpenses = computed(() => {
     const newlySeenIds = new Set(newExpenseIds.value)
-    return filteredExpenses.value.filter((expense) => !newlySeenIds.has(expense.id)).length > visibleExpenseCount.value
+    return filteredExpenses.value.filter((expense) => !expense.offline_pending && !newlySeenIds.has(expense.id)).length > visibleExpenseCount.value
   })
   const activeFilterCount = computed(() => Object.values(filters).filter(Boolean).length)
 
@@ -591,9 +591,15 @@ export function useGastoteca() {
     router.push(path)
   }
 
+  async function retryRouteLoad() {
+    if (!user.value) return
+    if (offline.pending || offline.serverUnavailable) await syncOffline()
+    if (user.value) return loadRouteData(route.name)
+  }
+
   function refreshExpenses() {
     if (route.name !== 'expenses' || !user.value) return
-    return loadRouteData('expenses')
+    return retryRouteLoad()
   }
 
   onMounted(async () => {
@@ -661,7 +667,7 @@ export function useGastoteca() {
     exportOfflineChanges,
     discardOfflineChanges,
     routeLoadFailed,
-    retryRouteLoad: () => loadRouteData(route.name),
+    retryRouteLoad,
     refreshExpenses,
     loadMoreExpenses: () => { visibleExpenseCount.value += 20 },
     signOut,

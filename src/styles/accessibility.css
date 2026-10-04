@@ -149,4 +149,9 @@ input[type='checkbox'], input[type='radio'] { flex-shrink: 0; }
 .offline-status-copy strong { font-size:14px; }
 .offline-status-copy p { margin:4px 0 0; font-size:13px; line-height:1.5; overflow-wrap:anywhere; color:var(--muted); }
 .offline-status-actions { display:flex; flex-shrink:0; gap:4px; }
+.pending-expenses { margin-bottom:24px; }
+.pending-expenses h2 { display:flex; align-items:center; gap:8px; margin:0 0 12px; font-size:16px; letter-spacing:0; }
+.pending-expenses h2 span { color:var(--muted); font-size:14px; }
+.expense-main .expense-sync-pending { color:#81551f; font-size:13px; line-height:1.5; }
+.expense-sync-pending svg { flex-shrink:0; }
 @media (max-width:580px) { .offline-status { flex-wrap:wrap; gap:10px; }.offline-status-copy { flex-basis:calc(100% - 35px); }.offline-status-actions { margin-left:31px; } }

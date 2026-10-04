@@ -30,9 +30,11 @@ const {
 } = useGastotecaContext()
 
 const expenseItems = computed(() => expenses.value.filter((expense) => (expense.transaction_type || 'expense') === 'expense'))
+const pendingExpenses = computed(() => expenses.value.filter(expense => expense.offline_pending))
+const filteredSyncedExpenses = computed(() => filteredExpenses.value.filter(expense => !expense.offline_pending))
 const newExpensesCount = computed(() => {
   const newIds = new Set(newExpenseIds.value)
-  return filteredExpenses.value.filter((expense) => newIds.has(expense.id)).length
+  return filteredSyncedExpenses.value.filter((expense) => newIds.has(expense.id)).length
 })
 const newExpensesMessage = computed(() => newExpensesCount.value === 1
   ? 'Hay 1 movimiento que no habías visto; ya está marcado como visto.'
@@ -68,6 +70,23 @@ const lastMonthExpenses = computed(() => {
         <span>Total gastado</span>
         <strong>{{ money(totalExpenses) }}</strong>
       </article>
+    </div>
+  </section>
+
+  <section v-if="pendingExpenses.length" class="pending-expenses" aria-labelledby="pending-expenses-heading">
+    <h2 id="pending-expenses-heading">Pendientes de sincronizar <span>{{ pendingExpenses.length }}</span></h2>
+    <div class="expense-list">
+      <ExpenseCard
+        v-for="expense in pendingExpenses"
+        :key="expense.id"
+        :expense="expense"
+        :category="category(expense.category)"
+        :place-icon="establishmentIcon(expense.place)"
+        :payer-name="memberLabel(expense.paid_by_uid)"
+        :participant-names="expense.applies_to_all ? '' : expense.participant_uids.map(memberLabel).join(', ')"
+        :current-uid="user?.uid || ''"
+        @edit="openExpense(expense)"
+      />
     </div>
   </section>
 
@@ -109,10 +128,10 @@ const lastMonthExpenses = computed(() => {
   </section>
 
   <div class="expense-list-heading">
-    <h1>Movimientos</h1><span aria-hidden="true">{{ filteredExpenses.length }}</span>
+    <h1>Movimientos</h1><span aria-hidden="true">{{ filteredSyncedExpenses.length }}</span>
   </div>
   <p v-if="newExpensesCount" class="new-expense-notice" role="status">{{ newExpensesMessage }}</p>
-  <section v-if="filteredExpenses.length" class="expense-list" aria-label="Lista de movimientos">
+  <section v-if="filteredSyncedExpenses.length" class="expense-list" aria-label="Lista de movimientos">
     <ExpenseCard
       v-for="expense in visibleExpenses"
       :key="expense.id"
@@ -133,7 +152,7 @@ const lastMonthExpenses = computed(() => {
       <button type="button" class="secondary" @click="loadMoreExpenses">Mostrar más movimientos</button>
     </div>
   </section>
-  <section v-else class="empty-state">
+  <section v-else-if="!pendingExpenses.length || activeFilterCount" class="empty-state">
     <PhReceipt aria-hidden="true" :size="40" /><h2>{{ expenses.length ? 'No hay resultados' : 'Tu primer gasto empieza aquí' }}</h2><p>{{ expenses.length ? 'Prueba a cambiar los filtros.' : 'Pulsa el botón + para añadir una compra, una factura o una cena.' }}</p>
     <button type="button" class="primary" @click="expenses.length ? clearFilters() : openExpense()">{{ expenses.length ? 'Limpiar filtros' : 'Añadir el primer movimiento' }}</button>
   </section>

@@ -52,7 +52,14 @@ export function useOffline({ user, group, expenses, settlements, stats, quickExp
     client = currentClient
     setOfflineClient(currentClient)
     if (channel) channel.onmessage = () => currentClient.refresh().catch(() => {})
-    try { return await currentClient.refresh() } catch {
+    try {
+      const snapshot = await currentClient.refresh()
+      // Recover the queue independently of optional settings and icon loading.
+      if (currentSession === session && offline.pending && navigator.onLine !== false) currentClient.retry().catch(reason => {
+        if (currentSession === session) offline.syncError = reason.message
+      })
+      return snapshot
+    } catch {
       offline.storageError = 'No se puede preparar el almacenamiento sin conexión en este navegador.'
       return null
     }
@@ -76,7 +83,6 @@ export function useOffline({ user, group, expenses, settlements, stats, quickExp
         ...quickExpenseTemplates.value.map(item => item.icon),
       ].filter(Boolean)
       customElements.get('iconify-icon')?.loadIcons([...new Set(icons)])
-      if (user.value?.uid === uid && offline.pending) await client?.retry()
     } catch { /* The current route still reports any unavailable data. */ }
   }
 
