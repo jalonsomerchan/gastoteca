@@ -9,6 +9,7 @@ export default createRouter({
     { path: '/edicion-masiva', name: 'bulk-edit', component: () => import('./views/BulkEditView.vue') },
     { path: '/importar', name: 'import', component: () => import('./views/ImportView.vue') },
     { path: '/balance', name: 'balance', component: () => import('./views/BalanceView.vue') },
+    { path: '/deudas', name: 'debts', component: () => import('./views/DebtsView.vue') },
     { path: '/estadisticas', name: 'stats', component: () => import('./views/StatisticsView.vue') },
     { path: '/presupuestos', name: 'budgets', component: () => import('./views/BudgetsView.vue') },
     { path: '/recurrentes', name: 'recurring', component: () => import('./views/RecurringView.vue') },

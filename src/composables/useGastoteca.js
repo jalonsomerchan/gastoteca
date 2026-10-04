@@ -15,6 +15,7 @@ import { useNotifications } from './useNotifications.js'
 import { useExpenses } from './useExpenses.js'
 import { useSettlements } from './useSettlements.js'
 import { useBudgets } from './useBudgets.js'
+import { useDebts, debtStatuses, debtStatusLabel } from './useDebts.js'
 import { useRecurring } from './useRecurring.js'
 import { useTags } from './useTags.js'
 import { useNotificationSettings } from './useNotificationSettings.js'
@@ -68,6 +69,7 @@ export function useGastoteca() {
     expenseHistoryLoading,
     settlementDraft,
     budgetDraft,
+    debtDraft,
     tagDraft,
     telegramNotificationTypes,
     appNotificationTypes,
@@ -280,6 +282,7 @@ export function useGastoteca() {
     flash,
   })
   const { saveBudget, deleteBudget } = useBudgets({ error, saving, freshToken, budgetDraft, group, flash })
+  const { debts, pendingDebtTotal, startDebt, saveDebt, deleteDebt } = useDebts({ error, saving, freshToken, debtDraft, group, memberOptions, currentMember, flash })
   const {
     toggleRecurring,
     startRecurringRule,
@@ -651,6 +654,14 @@ export function useGastoteca() {
     expenseHistoryLoading,
     settlementDraft,
     budgetDraft,
+    debtDraft,
+    debts,
+    pendingDebtTotal,
+    debtStatuses,
+    debtStatusLabel,
+    startDebt,
+    saveDebt,
+    deleteDebt,
     tagDraft,
     telegramNotificationTypes,
     appNotificationTypes,

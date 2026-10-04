@@ -18,6 +18,7 @@ El controlador principal está en `/Applications/MAMP/htdocs/OV2/api/mistergasto
 - `GET /gastoteca/bootstrap`: grupo, gastos y estadísticas.
 - `GET /gastoteca/expenses`: listado de gastos.
 - `GET /gastoteca/group`: datos del grupo y sus catálogos.
+- `POST /gastoteca/save_debt` y `POST /gastoteca/delete_debt`: crean, editan o eliminan deudas del grupo. Cada deuda contiene `concept`, `status` (`pending`, `paid` o `cancelled`), `source_uid` (persona a quien pagar), `target_uid` (persona que debe) y `amount`; para editar se envía también `id`. El listado viene en `group.debts`.
 - `GET /gastoteca/statistics`: agregados por categoría, pagador y mes.
 - `POST /gastoteca/save_expense`: crea o edita un movimiento; acepta y devuelve `share_mode` (`equal`, `amount` o `percent`).
 - `POST /gastoteca/delete_expense`: elimina un gasto.
@@ -43,6 +44,14 @@ La API crea automáticamente la base `mistergastos` y sus tablas `mg_*`. Estable
 
 El servidor de la API envía las invitaciones con PHP `mail()`, por lo que el servidor debe tener un MTA/sendmail operativo. `MISTERGASTOS_MAIL_FROM` permite configurar el remitente; si no se define, se usa `admin@alonsoftware.ga`. La API devuelve un error en vez de marcar como enviada una invitación si el transporte de correo falla.
 
+## Deudas
+
+La página `/deudas`, accesible como «Deudas» en el menú, permite registrar concepto, estado, persona origen (a quien hay que pagar), persona destino (quien debe) e importe. Incluye creación y edición en un modal, borrado con confirmación, búsqueda por concepto o persona, filtro por estado y resumen de importes pendientes.
+
+Las personas se seleccionan entre miembros del grupo y deben ser distintas. Las deudas se guardan en `mg_debts`, separadas de los movimientos y las liquidaciones; marcarlas como pagadas actualiza su estado sin crear un gasto ni una liquidación. Todos los miembros del grupo pueden gestionarlas y la API impide acceder a deudas de otros grupos. Si alguien abandona el grupo, las deudas existentes conservan sus nombres y pueden seguir editándose.
+
+La migración automática 13 añade únicamente la tabla de deudas sobre el esquema 12. Para producción hay que desplegar el frontend y `/Applications/MAMP/htdocs/OV2/api/mistergastos.php`.
+
 ## Copias por Telegram
 
 En Ajustes, «Copias de seguridad» permite enviar una copia ahora o guardar una programación diaria, semanal o mensual. Se usa la conexión personal de Telegram de Menu Diario; los tipos de aviso seleccionados no afectan a las copias. La programación pertenece a la cuenta y al grupo actual, se elimina al abandonar el grupo y arranca desactivada. Las fechas de envío se almacenan en UTC y se muestran con horario de Madrid. El día 29, 30 o 31 se ajusta al último día de los meses más cortos sin cambiar el día elegido para los meses siguientes.
@@ -57,7 +66,7 @@ El cron existente `GET /telegram/run_scheduled_alerts` y el script `cron/menudia
 
 En Ajustes se pueden activar a la vez los resúmenes diarios, semanales y mensuales, con hora y día independientes, o enviar uno manualmente. Usan el mismo cron de las copias, incluso si las copias CSV están desactivadas: no hay que añadir ninguna tarea al servidor. La respuesta del cron incorpora `summaries` con el número de resúmenes revisados, enviados y fallidos. Se usa la conexión personal de Telegram; desactivar los avisos de actividad no desactiva los resúmenes.
 
-Los mensajes resumen el último periodo completo según Europe/Madrid: el día anterior, la semana anterior de lunes a domingo o el mes anterior. Incluyen gastos del grupo, número de movimientos, media diaria, parte del reparto que corresponde al destinatario, ingresos, ingresos menos gastos, comparación de gastos con el periodo previo y cinco categorías principales más el resto. Solo cuentan movimientos confirmados; los pendientes y las liquidaciones entre miembros no se suman como gastos. Un periodo sin gastos se indica expresamente.
+Los mensajes resumen el último periodo completo según Europe/Madrid: el día anterior, la semana anterior de lunes a domingo o el mes anterior. Los resúmenes semanales y mensuales muestran «💸 La Gastoteca: Resumen Semanal / Mensual», el saldo neto pendiente actual del destinatario («Debes», «Te deben» o «Balance equilibrado»), gastos e ingresos del periodo, variación del gasto frente al periodo previo y tres rankings: top 3 establecimientos, top 3 categorías y top 3 mayores gastos individuales. Los rankings se ordenan por importe descendente y los establecimientos solo incluyen gastos con un establecimiento asignado. El saldo usa todo el historial de gastos compartidos confirmados y descuenta las liquidaciones, igual que la página Balance. El resumen diario conserva sus totales, media diaria, parte del reparto, ingresos menos gastos y cinco categorías principales más el resto. Solo cuentan movimientos confirmados; los pendientes y las liquidaciones entre miembros no se suman como gastos. Los periodos vacíos y la ausencia de gastos previos para calcular un porcentaje se indican expresamente.
 
 Las programaciones pertenecen a la cuenta y al grupo y se eliminan al abandonar el grupo. Se guardan juntas en una transacción. Los envíos manuales y guardar una programación sin modificarla conservan los envíos pendientes. El cron evita ejecuciones simultáneas y reintenta los fallos; tras una interrupción envía una vez el último periodo completo disponible, sin acumular mensajes de todos los periodos omitidos.
 
@@ -95,10 +104,13 @@ La visibilidad y la autoría de las plantillas se prueban también contra el con
 
 ```sh
 php tests/quick-template-api.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
+php tests/debts-api.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
 php tests/backups-api.test.php /Applications/MAMP/htdocs/OV2/api/GastotecaBackups.php
 php tests/backup-controller.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
 php tests/summaries-api.test.php /Applications/MAMP/htdocs/OV2/api/GastotecaBackups.php
 ```
+
+Las pruebas de resúmenes también ejecutan las consultas de rankings y saldo contra SQLite en memoria; requieren la extensión PHP `pdo_sqlite` y no acceden a datos reales.
 
 Las pruebas usan el ejecutor de Node y Vite para cargar componentes Vue, sin dependencias de pruebas adicionales. Cubren balances y liquidaciones, sugerencias, aislamiento del estado, reparto, contratos de guardado y borrado, errores de API y renderizado de las diez rutas y los diálogos. Las peticiones de las pruebas de operaciones están simuladas: no requieren Firebase ni modifican datos reales. El workflow ejecuta las pruebas antes de generar la build.
 

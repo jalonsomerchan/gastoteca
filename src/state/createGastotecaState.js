@@ -73,6 +73,7 @@ export function createGastotecaState() {
   const expenseHistoryLoading = ref(false)
   const settlementDraft = reactive({ payer_uid: '', payee_uid: '', amount: '', payment_method: 'card' })
   const budgetDraft = reactive({ category: 'food', monthly_limit: '' })
+  const debtDraft = reactive({ id: '', concept: '', status: 'pending', source_uid: '', target_uid: '', amount: '' })
   const tagDraft = reactive({ id: '', name: '' })
   const telegramNotificationTypes = ref([])
   const appNotificationTypes = ref([])
@@ -155,6 +156,7 @@ export function createGastotecaState() {
     expenseHistoryLoading,
     settlementDraft,
     budgetDraft,
+    debtDraft,
     tagDraft,
     telegramNotificationTypes,
     appNotificationTypes,

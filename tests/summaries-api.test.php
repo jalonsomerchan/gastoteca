@@ -49,6 +49,19 @@ class SummaryTestApi extends BackupTestApi
             check($values[0] === 1 && strpos($sql, "e.confirmed_at IS NOT NULL AND e.transaction_type='expense'") !== false, 'Categories only count confirmed expenses in current group');
             return array(array('label' => 'Alimentación', 'total' => '90.00'));
         }
+        if (strpos($sql, 'SELECT COALESCE(SUM(CASE WHEN e.paid_by_uid=') === 0) {
+            check($types === 'siss' && $values === array('alice', 1, 'alice', 'alice'), 'Balance only for authenticated account and group');
+            return array(array('net_balance' => '45.00'));
+        }
+        if (strpos($sql, 'SELECT COALESCE(SUM(CASE WHEN payer_uid=') === 0) {
+            check($types === 'siss' && $values === array('alice', 1, 'alice', 'alice'), 'Only personal settlements affect balance');
+            return array(array('net_balance' => '-12.50'));
+        }
+        if (strpos($sql, 'SELECT p.name AS label,SUM(e.amount)') === 0 || strpos($sql, 'SELECT e.name AS label,e.amount AS total') === 0) {
+            check($types === 'iss' && $values === $this->totalsReads[count($this->totalsReads) - 2], 'Rankings use the selected period');
+            return strpos($sql, 'SELECT p.name') === 0 ? array(array('label' => 'Mercadona', 'total' => '90.00'))
+                : array(array('label' => 'Compra semanal', 'total' => '60.00', 'place' => 'Mercadona'));
+        }
         if (strpos($sql, 'SELECT COALESCE(SUM(p.share_amount)') === 0) {
             check(array_slice($values, 0, 2) === array('alice', 1) && $types === 'siss', 'Personal share uses authenticated uid and group');
             return array(array('total' => '32.50'));
@@ -94,8 +107,9 @@ check($delivery['ok'] && $delivery['data']['period'] === 'weekly', 'Manual summa
 check($summaryApi->schedules['weekly']['next_run_at'] === $saved['weekly']['next_run_at'], 'Manual summary preserves saved schedule');
 $message = end(MenuDiarioTelegram::$messages);
 check($message['chat_id'] === 'alice-chat', 'Summary only to authenticated personal Telegram');
-check(strpos($message['text'], 'Gastos del grupo: 120,00 € (3 movimientos)') !== false && strpos($message['text'], 'Tu parte del reparto: 32,50 €') !== false && strpos($message['text'], '20,0% más') !== false && strpos($message['text'], '• Resto: 30,00 €') !== false, 'Message totals, shares, comparison and remaining categories');
-check(strpos($message['text'], 'Ingresos: 300,00 €') !== false && strpos($message['text'], 'Ingresos − gastos: 180,00 €') !== false, 'Income and net flow do not mix into expenses');
+check(strpos($message['text'], '💸 La Gastoteca: Resumen Semanal') === 0 && strpos($message['text'], 'Te deben: 32,50 €') !== false, 'Weekly heading and current personal balance');
+check(strpos($message['text'], 'Gastos de la última semana: 120,00 €') !== false && strpos($message['text'], 'Ingresos de la última semana: 300,00 €') !== false && strpos($message['text'], 'Habéis gastado un 20,0% más que en la semana anterior.') !== false, 'Weekly totals and comparison');
+check(strpos($message['text'], "Top 3 establecimientos donde más habéis gastado\n1. Mercadona: 90,00 €") !== false && strpos($message['text'], "Top 3 categorías donde más habéis gastado\n1. Alimentación: 90,00 €") !== false && strpos($message['text'], "Top 3 mayores gastos\n1. Compra semanal · Mercadona: 60,00 €") !== false, 'All three rankings include labels and amounts');
 $summaryApi->schedules['weekly']['next_run_at'] = '2020-01-01 00:00:00'; $summaryApi->schedules['monthly']['next_run_at'] = '2020-01-01 00:00:00';
 $_POST = array('schedules' => $summaryApi->summary_settings()['data']['schedules']);
 check($summaryApi->save_summary_settings()['ok'] && $summaryApi->schedules['weekly']['next_run_at'] === '2020-01-01 00:00:00', 'Unchanged settings preserve pending deliveries');
@@ -116,7 +130,87 @@ $_POST = array('schedules' => $defaults);
 check($summaryApi->save_summary_settings()['ok'] && $summaryApi->schedules['weekly']['next_run_at'] === null, 'Can disable summaries while disconnected');
 $summaryApi->identity = null;
 check($summaryApi->send_summary()['status'] === 401 && $summaryApi->summary_settings()['status'] === 401, 'Authentication required');
-$empty = GastotecaSummary::message('monthly', "Prueba\nGrupo", $month, array('expense_total' => 0, 'income_total' => 10, 'own_share' => 0, 'expense_count' => 0, 'previous_total' => 0, 'categories' => array()));
+$emptyData = array('expense_total' => 0, 'income_total' => 10, 'net_balance' => 0, 'expense_count' => 0, 'previous_total' => 0, 'categories' => array(), 'establishments' => array(), 'largest_expenses' => array());
+$empty = GastotecaSummary::message('monthly', "Prueba\nGrupo", $month, $emptyData);
 check(strpos($empty, 'No hubo gastos confirmados') !== false && strpos($empty, '%') === false && strpos($empty, 'Prueba Grupo') !== false, 'Empty periods and zero comparison are explicit');
+check(strpos($empty, 'Resumen Mensual') !== false && strpos($empty, 'Ingresos del último mes: 10,00 €') !== false && strpos($empty, 'Balance equilibrado: 0,00 €') !== false && substr_count($empty, 'Sin gastos confirmados.') === 3, 'Monthly labels and empty rankings');
+$decreased = GastotecaSummary::message('monthly', 'Grupo', $month, array_merge($emptyData, array('expense_total' => 50, 'expense_count' => 1, 'previous_total' => 100, 'net_balance' => -25.50)));
+check(strpos($decreased, 'Debes: 25,50 €') !== false && strpos($decreased, 'Habéis gastado un 50,0% menos que en el mes anterior.') !== false, 'Negative balance and lower monthly spending');
+$unchanged = GastotecaSummary::message('weekly', 'Grupo', $week, array_merge($emptyData, array('expense_total' => 100, 'expense_count' => 1, 'previous_total' => 100)));
+check(strpos($unchanged, 'Habéis gastado lo mismo que en la semana anterior.') !== false && strpos($unchanged, '%') === false, 'Equal spending is explicit');
+$firstSpend = GastotecaSummary::message('weekly', 'Grupo', $week, array_merge($emptyData, array('expense_total' => 100, 'expense_count' => 1)));
+check(strpos($firstSpend, 'no se puede calcular la variación porcentual') !== false && strpos($firstSpend, '%') === false, 'First spending does not divide by zero');
+$noSpend = GastotecaSummary::message('weekly', 'Grupo', $week, array_merge($emptyData, array('previous_total' => 100)));
+check(strpos($noSpend, '100,0% menos') !== false && strpos($noSpend, 'No hubo gastos confirmados') !== false, 'Empty current period with previous spending');
+$daily = GastotecaSummary::message('daily', 'Grupo', $day, array_merge($emptyData, array('expense_total' => 120, 'expense_count' => 3, 'previous_total' => 100, 'own_share' => 32.50, 'categories' => array(array('label' => 'Alimentación', 'total' => 90)))));
+check(strpos($daily, 'Resumen diario') !== false && strpos($daily, 'Tu parte del reparto: 32,50 €') !== false && strpos($daily, '• Resto: 30,00 €') !== false, 'Daily summary keeps its existing format');
 
-echo "Summary calendar, text, settings, scope, shared cron, retries and transaction checks passed.\n";
+// Execute the real aggregation SQL against isolated fixtures, with no account data.
+class SummarySqlTestApi extends SummaryTestApi
+{
+    public $statistics;
+    public function __construct() {
+        parent::__construct();
+        $this->statistics = new PDO('sqlite::memory:');
+        $this->statistics->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $this->statistics->exec('CREATE TABLE mg_expenses (id INTEGER,group_id INTEGER,transaction_type TEXT,name TEXT,amount NUMERIC,category_id INTEGER,place_id INTEGER,occurred_at TEXT,confirmed_at TEXT,paid_by_type TEXT,paid_by_uid TEXT)');
+        $this->statistics->exec('CREATE TABLE mg_expense_participants (expense_id INTEGER,uid TEXT,share_amount NUMERIC)');
+        $this->statistics->exec('CREATE TABLE mg_categories (id INTEGER,group_id INTEGER,label TEXT)');
+        $this->statistics->exec('CREATE TABLE mg_places (id INTEGER,group_id INTEGER,name TEXT)');
+        $this->statistics->exec('CREATE TABLE mg_settlements (group_id INTEGER,payer_uid TEXT,payee_uid TEXT,amount NUMERIC)');
+    }
+    protected function query($sql, $types = '', $values = array()) {
+        if (strpos($sql, 'FROM mg_expenses e') !== false || strpos($sql, 'FROM mg_settlements WHERE') !== false) {
+            $statement = $this->statistics->prepare($sql);
+            $statement->execute($values);
+            return $statement->fetchAll(PDO::FETCH_ASSOC);
+        }
+        return parent::query($sql, $types, $values);
+    }
+    public function fixture($table, $values) {
+        $this->statistics->prepare('INSERT INTO ' . $table . ' VALUES (' . implode(',', array_fill(0, count($values), '?')) . ')')->execute($values);
+    }
+}
+
+$sqlApi = new SummarySqlTestApi();
+$sqlPeriod = GastotecaSummary::period('weekly', new DateTimeImmutable('now', new DateTimeZone('Europe/Madrid')));
+$currentDate = $sqlPeriod['from'] . ' 12:00:00';
+foreach (array('Alimentación', 'Restaurantes', 'Café', 'Hogar') as $index => $label) $sqlApi->fixture('mg_categories', array($index + 1, 1, $label));
+foreach (array('Mercadona', 'Restaurante', 'Panadería', 'Kiosco') as $index => $label) $sqlApi->fixture('mg_places', array($index + 1, 1, $label));
+$sqlApi->fixture('mg_categories', array(5, 2, 'Otro grupo'));
+$sqlApi->fixture('mg_places', array(5, 2, 'Otro grupo'));
+$fixtureExpenses = array(
+    array(1, 1, 'expense', "Compra\ngrande", 60, 1, 1, $currentDate, 'confirmed', 'person', 'alice', 'bob', 30),
+    array(2, 1, 'expense', 'Cena', 40, 2, 2, $currentDate, 'confirmed', 'person', 'bob', 'alice', 20),
+    array(3, 1, 'expense', 'Café', 20, 3, 1, $currentDate, 'confirmed', 'all', null, 'alice', 10),
+    array(4, 1, 'expense', 'Menú', 10, 4, null, $currentDate, 'confirmed', 'person', 'charlie', 'alice', 5),
+    array(5, 1, 'expense', 'Compra pequeña', 10, 1, 3, $currentDate, 'confirmed', 'person', 'alice', 'bob', 5),
+    array(6, 1, 'expense', 'Prensa', 5, 1, 4, $currentDate, 'confirmed', 'person', 'alice', 'bob', 5),
+    array(7, 1, 'income', 'Ingreso excluido de rankings y saldo', 300, 1, 1, $currentDate, 'confirmed', 'person', 'alice', 'bob', 150),
+    array(8, 1, 'expense', 'Pendiente excluido', 10000, 1, 1, $currentDate, null, 'person', 'alice', 'bob', 5000),
+    array(9, 2, 'expense', 'Otro grupo excluido', 20000, 5, 5, $currentDate, 'confirmed', 'person', 'alice', 'bob', 10000),
+    array(10, 1, 'expense', 'Periodo previo', 100, 1, 1, $sqlPeriod['previous_start'], 'confirmed', 'person', 'bob', 'alice', 50),
+    array(11, 1, 'expense', 'Saldo histórico', 160, 1, 1, (new DateTimeImmutable($sqlPeriod['previous_start']))->modify('-1 day')->format('Y-m-d H:i:s'), 'confirmed', 'person', 'alice', 'bob', 80),
+    array(12, 1, 'expense', 'Límite final excluido', 250, 4, null, $sqlPeriod['end'], 'confirmed', 'all', null, 'alice', 0),
+);
+foreach ($fixtureExpenses as $expense) {
+    $sqlApi->fixture('mg_expenses', array_slice($expense, 0, 11));
+    $sqlApi->fixture('mg_expense_participants', array($expense[0], $expense[11], $expense[12]));
+    if ($expense[10] && $expense[10] !== $expense[11]) $sqlApi->fixture('mg_expense_participants', array($expense[0], $expense[10], $expense[4] - $expense[12]));
+}
+foreach (array(array(1, 'alice', 'bob', 15), array(1, 'bob', 'alice', 12), array(1, 'bob', 'charlie', 10000), array(2, 'alice', 'bob', 10000), array(1, 'alice', 'alice', 10000)) as $settlement) $sqlApi->fixture('mg_settlements', $settlement);
+$_POST = array('period' => 'weekly', 'uid' => 'bob', 'group_id' => 2);
+check($sqlApi->send_summary()['ok'], 'Real aggregation queries send the authenticated group summary');
+$sqlMessage = end(MenuDiarioTelegram::$messages)['text'];
+check(strpos($sqlMessage, 'Te deben: 48,00 €') !== false, 'Balance uses historical shares, excludes self payments, income, pending and other groups, and applies settlements in both directions');
+check(strpos($sqlMessage, 'Gastos de la última semana: 145,00 €') !== false && strpos($sqlMessage, 'Ingresos de la última semana: 300,00 €') !== false && strpos($sqlMessage, '45,0% más') !== false, 'Totals keep income separate and use the current and previous calendar periods');
+check(strpos($sqlMessage, "Top 3 establecimientos donde más habéis gastado\n1. Mercadona: 80,00 €\n2. Restaurante: 40,00 €\n3. Panadería: 10,00 €") !== false && strpos($sqlMessage, 'Kiosco') === false, 'Establishment ranking groups purchases, sorts by total and limits to three');
+check(strpos($sqlMessage, "Top 3 categorías donde más habéis gastado\n1. Alimentación: 75,00 €\n2. Restaurantes: 40,00 €\n3. Café: 20,00 €") !== false && strpos($sqlMessage, 'Hogar') === false, 'Category ranking groups purchases, sorts by total and limits to three');
+check(strpos($sqlMessage, "Top 3 mayores gastos\n1. Compra grande · Mercadona: 60,00 €\n2. Cena · Restaurante: 40,00 €\n3. Café · Mercadona: 20,00 €") !== false && strpos($sqlMessage, 'Menú') === false && strpos($sqlMessage, 'excluido') === false && strpos($sqlMessage, 'Saldo histórico') === false, 'Largest expenses rank individual confirmed purchases within the period and sanitize multiline labels');
+$balanceMethod = new ReflectionMethod(SummarySqlTestApi::class, 'summaryBalance'); $balanceMethod->setAccessible(true);
+$sqlApi->fixture('mg_settlements', array(1, 'bob', 'alice', 75));
+check($balanceMethod->invoke($sqlApi, 1, 'alice') === -27.0, 'Receiving a settlement reduces personal net credit');
+$sqlApi->fixture('mg_settlements', array(1, 'alice', 'bob', 27));
+check($balanceMethod->invoke($sqlApi, 1, 'alice') === 0.0, 'Paying outstanding debt restores an even balance');
+
+echo "Summary calendar, text, SQL rankings/balance, settings, scope, shared cron, retries and transaction checks passed.\n";

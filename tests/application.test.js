@@ -17,6 +17,7 @@ const { createGastotecaState } = await server.ssrLoadModule('/src/state/createGa
 const { useDataEditor } = await server.ssrLoadModule('/src/composables/useDataEditor.js')
 const { useTags } = await server.ssrLoadModule('/src/composables/useTags.js')
 const { useBudgets } = await server.ssrLoadModule('/src/composables/useBudgets.js')
+const { useDebts } = await server.ssrLoadModule('/src/composables/useDebts.js')
 const { useRecurring } = await server.ssrLoadModule('/src/composables/useRecurring.js')
 const { useBackups } = await server.ssrLoadModule('/src/composables/useBackups.js')
 const { useSummaries } = await server.ssrLoadModule('/src/composables/useSummaries.js')
@@ -37,6 +38,7 @@ function populate(app) {
     establishments: [{ name: 'Restaurante', icon: 'mdi:store' }], custom_categories: [],
     tags: [{ id: 1, name: 'Viaje', usage_count: 1, last_used_at: '2026-09-20 12:00:00' }], budgets: [{ category: 'food', monthly_limit: 200, current_total: 30 }],
     recurring: [{ id: 1, name: 'Alquiler', amount: 500, category: 'home', next_at: '2026-10-01 12:00:00', frequency: 'monthly', active: true }],
+    debts: [{ id: 1, concept: 'Préstamo para el viaje', status: 'pending', source_uid: 'alice', target_uid: 'bob', source_name: 'Alicia', target_name: 'Roberto', amount: 75 }],
   }
   app.catalogDraft.categories = [{ key: 'food', label: 'Alimentación', icon: 'mdi:food-apple-outline' }]
   app.catalogDraft.establishments = [{ name: 'Restaurante', icon: 'mdi:store' }]
@@ -99,6 +101,91 @@ test('application state and editable drafts are isolated between instances', () 
   assert.equal(second.backupStatus.last_sent_at, null)
   first.summaryDraft.weekly.enabled = true
   assert.equal(second.summaryDraft.weekly.enabled, false)
+  first.debtDraft.concept = 'Solo aquí'
+  assert.equal(second.debtDraft.concept, '')
+})
+
+function debtActions() {
+  const state = createGastotecaState()
+  populate(state)
+  const actions = useDebts({ ...state, memberOptions: ref([alice, bob]), currentMember: ref(alice), freshToken: async () => 'debt-token', flash: () => {} })
+  return { ...state, ...actions }
+}
+
+test('debt defaults distinguish creditor from debtor and totals count only pending amounts', () => {
+  const app = debtActions()
+  app.startDebt()
+  assert.equal(app.debtDraft.source_uid, 'bob')
+  assert.equal(app.debtDraft.target_uid, 'alice')
+  const debt = app.debts.value[0]
+  app.group.value.debts.push({ ...debt, id: 2, amount: 0.1 }, { ...debt, id: 3, amount: 0.2 }, { ...debt, id: 4, status: 'paid', amount: 100 }, { ...debt, id: 5, status: 'cancelled', amount: 200 })
+  assert.equal(app.pendingDebtTotal.value, 75.3)
+  app.startDebt(debt)
+  assert.equal(app.debtDraft.source_uid, 'alice')
+  assert.equal(app.debtDraft.target_uid, 'bob')
+  assert.equal(app.debtDraft.amount, '75.00')
+})
+
+test('debt validation rejects missing concepts, invalid amounts, statuses and people before requesting the API', async t => {
+  const app = debtActions()
+  const fetchMock = t.mock.method(globalThis, 'fetch', () => assert.fail('Invalid debt must not be sent'))
+  const valid = { id: '', concept: 'Préstamo', status: 'pending', source_uid: 'alice', target_uid: 'bob', amount: '12.50' }
+  for (const invalid of [{ concept: ' ' }, { amount: '0' }, { amount: '0.001' }, { amount: 'Infinity' }, { amount: '100000000' }, { status: 'unknown' }, { source_uid: 'other-group' }, { target_uid: 'alice' }]) {
+    Object.assign(app.debtDraft, valid, invalid)
+    assert.equal(await app.saveDebt(), false)
+    assert.ok(app.error.value)
+    assert.equal(app.saving.value, false)
+  }
+  assert.equal(fetchMock.mock.callCount(), 0)
+})
+
+test('debt editor persists all fields, changes status and closes only after successful save', async t => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.match(url, /gastoteca\/save_debt$/)
+    assert.equal(options.headers.Authorization, 'Bearer test-token')
+    const body = JSON.parse(options.body)
+    assert.deepEqual(body, { id: 1, concept: 'Préstamo pagado', status: 'paid', source_uid: 'alice', target_uid: 'bob', amount: 75 })
+    return { ok: true, json: async () => ({ data: { group: { members: [alice, bob], debts: [body] } } }) }
+  })
+  const editor = await mountDataEditor(state => {
+    const actions = useDebts(state)
+    return { reset: actions.startDebt, save: actions.saveDebt }
+  }, { id: 1, concept: 'Préstamo', status: 'pending', source_uid: 'alice', target_uid: 'bob', amount: 75 })
+  editor.debtDraft.concept = '  Préstamo pagado  '
+  editor.debtDraft.status = 'paid'
+  await editor.submitEditor()
+  assert.equal(fetchMock.mock.callCount(), 1)
+  assert.equal(editor.group.value.debts[0].status, 'paid')
+  assert.equal(editor.editorOpen.value, false)
+  assert.equal(editor.debtDraft.concept, '')
+})
+
+test('debt failures preserve the editor draft and deletion updates the group only after success', async t => {
+  const app = debtActions()
+  app.startDebt(app.debts.value[0])
+  const before = app.group.value
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 500, json: async () => ({ message: 'No se pudo guardar la deuda.' }) }))
+  assert.equal(await app.saveDebt(), false)
+  assert.equal(app.debtDraft.concept, 'Préstamo para el viaje')
+  assert.equal(app.group.value, before)
+  assert.equal(await app.deleteDebt(app.debts.value[0]), false)
+  assert.equal(app.debts.value.length, 1)
+  assert.equal(app.saving.value, false)
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.match(url, /gastoteca\/delete_debt$/)
+    assert.deepEqual(JSON.parse(options.body), { id: 1 })
+    return { ok: true, json: async () => ({ data: { group: { members: [alice, bob], debts: [] } } }) }
+  })
+  assert.equal(await app.deleteDebt(app.debts.value[0]), true)
+  assert.deepEqual(app.debts.value, [])
+})
+
+test('debts page displays concept, state, both people and amount, with status filtering and single-member guidance', async () => {
+  const html = await renderComponent('/src/views/DebtsView.vue', 'debts')
+  for (const text of ['Préstamo para el viaje', 'Pendiente', 'A quien pagar', 'Quien debe', 'Alicia', 'Roberto', '75,00', 'Todos los estados']) assert.ok(html.includes(text), text)
+  const empty = await renderComponent('/src/views/DebtsView.vue', 'debts', app => { app.group.value = { members: [alice] } })
+  assert.match(empty, /al menos dos personas/)
+  assert.match(empty, /disabled[^>]*>[\s\S]*?Nueva deuda/)
 })
 
 test('backup settings send the schedule and apply persisted dates', async t => {
@@ -265,7 +352,7 @@ test('settings render simultaneous weekly and monthly summaries with labelled sc
   assert.match(html, /mes anterior completo/)
 })
 
-const views = { expenses: 'Expenses', 'quick-expenses': 'QuickExpenses', 'bulk-edit': 'BulkEdit', import: 'Import', balance: 'Balance', stats: 'Statistics', budgets: 'Budgets', recurring: 'Recurring', tags: 'Tags', establishments: 'Catalog', categories: 'Catalog', group: 'Group', settings: 'Settings' }
+const views = { expenses: 'Expenses', debts: 'Debts', 'quick-expenses': 'QuickExpenses', 'bulk-edit': 'BulkEdit', import: 'Import', balance: 'Balance', stats: 'Statistics', budgets: 'Budgets', recurring: 'Recurring', tags: 'Tags', establishments: 'Catalog', categories: 'Catalog', group: 'Group', settings: 'Settings' }
 for (const [route, view] of Object.entries(views)) {
   test(`renders ${route} with populated state`, async () => {
     const html = await renderComponent(`/src/views/${view}View.vue`, route)
@@ -283,6 +370,7 @@ test('data management pages expose a labelled search and keep forms inside close
   for (const [route, view, id] of [
     ['establishments', 'Catalog', 'catalog-search'], ['categories', 'Catalog', 'catalog-search'],
     ['tags', 'Tags', 'tag-search'], ['budgets', 'Budgets', 'budget-search'],
+    ['debts', 'Debts', 'debt-search'],
     ['recurring', 'Recurring', 'recurring-search'], ['quick-expenses', 'QuickExpenses', 'quick-template-search'],
   ]) {
     const html = await renderComponent(`/src/views/${view}View.vue`, route)

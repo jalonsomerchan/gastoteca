@@ -178,6 +178,25 @@ CREATE TABLE IF NOT EXISTS mg_settlements (
   CONSTRAINT fk_mg_settlement_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS mg_debts (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  group_id BIGINT UNSIGNED NOT NULL,
+  concept VARCHAR(160) NOT NULL,
+  status ENUM('pending','paid','cancelled') NOT NULL DEFAULT 'pending',
+  source_uid VARCHAR(128) NOT NULL,
+  target_uid VARCHAR(128) NOT NULL,
+  source_name VARCHAR(255) NOT NULL,
+  target_name VARCHAR(255) NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  created_by VARCHAR(128) NOT NULL,
+  updated_by VARCHAR(128) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_mg_debt_group_status (group_id, status, id),
+  CONSTRAINT fk_mg_debt_group FOREIGN KEY (group_id) REFERENCES mg_groups(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS mg_budgets (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   group_id BIGINT UNSIGNED NOT NULL,

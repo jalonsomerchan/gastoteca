@@ -21,7 +21,7 @@ const change = (period, field, value) => emit('update-schedule', { period, field
       <PhChartBar aria-hidden="true" :size="26" />
     </div>
     <p class="feature-hint settings-intro">
-      Recibe un mensaje en Telegram con los gastos del grupo, las principales categorías, tu parte del reparto, los ingresos y la comparación con el periodo anterior. Puedes activar varios resúmenes a la vez.
+      Los resúmenes semanales y mensuales incluyen tu saldo pendiente, gastos, ingresos, la comparación con el periodo anterior y los top 3 de establecimientos, categorías y mayores gastos. Puedes activar varios resúmenes a la vez.
     </p>
     <p v-if="!connected" class="feature-hint">
       {{ configured ? 'Conecta tu cuenta en la sección Telegram para recibir resúmenes.' : 'Telegram debe estar configurado en el servidor para enviar resúmenes.' }}

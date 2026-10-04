@@ -60,7 +60,7 @@ class TemplateTestConnection
             return array(array('id' => 1, 'name' => 'Test', 'owner_uid' => 'alice', 'invite_code' => 'TEST1234', 'default_city' => '', 'default_payment_method' => 'card'));
         if (strpos($sql, 'SELECT uid,email,name FROM mg_group_members') === 0)
             return array_map(function ($uid) { return array('uid' => $uid, 'email' => $uid . '@example.test', 'name' => $uid); }, $this->members[1]);
-        foreach (array('SELECT email FROM mg_group_invites', 'SELECT category_key,label,icon', 'SELECT name,icon FROM mg_places', 'SELECT t.id,t.name', 'SELECT c.category_key', 'SELECT id,active,frequency') as $prefix) {
+        foreach (array('SELECT email FROM mg_group_invites', 'SELECT category_key,label,icon', 'SELECT name,icon FROM mg_places', 'SELECT t.id,t.name', 'SELECT c.category_key', 'SELECT id,active,frequency', 'SELECT id,concept,status,source_uid,target_uid,source_name,target_name,amount,created_at') as $prefix) {
             if (strpos($sql, $prefix) === 0) return array();
         }
         foreach (array('INSERT IGNORE INTO mg_preferences', 'UPDATE mg_group_members SET email', 'INSERT INTO mg_categories') as $prefix) {

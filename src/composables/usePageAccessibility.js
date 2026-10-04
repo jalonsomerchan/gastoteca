@@ -1,7 +1,7 @@
 import { computed, nextTick, watch } from 'vue'
 
 const pageNames = {
-  expenses: 'Movimientos', balance: 'Balance', stats: 'Estadísticas', budgets: 'Presupuestos',
+  expenses: 'Movimientos', balance: 'Balance', debts: 'Deudas', stats: 'Estadísticas', budgets: 'Presupuestos',
   recurring: 'Gastos recurrentes', tags: 'Etiquetas', establishments: 'Establecimientos',
   categories: 'Categorías', 'bulk-edit': 'Edición masiva', import: 'Importar gastos', group: 'Tu grupo', settings: 'Ajustes',
 }

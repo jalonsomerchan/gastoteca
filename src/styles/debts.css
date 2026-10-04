@@ -1,0 +1,26 @@
+.debt-summary { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; padding: 1.4rem; background: var(--soft); border: 1px solid var(--line); border-radius: 20px; }
+.debt-summary > div { display: grid; gap: .35rem; min-width: 0; }
+.debt-summary span { color: var(--muted); font-size: .85rem; }
+.debt-summary strong { color: var(--green); font-size: 1.5rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.debt-status-filter { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; color: var(--muted); font-size: .875rem; }
+.debt-status-filter select { max-width: 100%; padding: .6rem; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 10px; font: inherit; }
+.debt-group-hint { color: var(--muted); font-size: .875rem; line-height: 1.6; }
+.debt-list { display: grid; gap: 1rem; }
+.debt-item { min-width: 0; padding: 1.1rem; border: 1px solid var(--line); border-radius: 16px; }
+.debt-item-heading { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; }
+.debt-item-heading h2 { flex: 1 1 200px; min-width: 0; margin: 0; font-size: 1.1rem; overflow-wrap: anywhere; }
+.debt-status { padding: .35rem .6rem; border-radius: 999px; font-size: .8rem; font-weight: 700; }
+.debt-status-pending { color: #765015; background: #fff2d7; }
+.debt-status-paid { color: var(--green); background: var(--soft); }
+.debt-status-cancelled { color: #59645f; background: #f0f2f0; }
+.debt-amount { margin-left: auto; font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.debt-people { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 1rem 0; }
+.debt-people dt { color: var(--muted); font-size: .8rem; }
+.debt-people dd { margin: .25rem 0 0; font-weight: 650; overflow-wrap: anywhere; }
+@media (max-width: 580px) {
+  .debts-heading > .primary { width: 100%; }
+  .debt-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 1rem; }
+  .debt-summary > div:first-child { grid-column: 1 / -1; }
+  .debt-item-heading h2 { flex-basis: 100%; }
+  .debt-people { grid-template-columns: minmax(0, 1fr); gap: .75rem; }
+}
