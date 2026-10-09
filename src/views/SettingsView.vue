@@ -2,6 +2,19 @@
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
 import { PhCheck, PhArrowRight, PhUsers, PhCloudArrowUp } from '@phosphor-icons/vue'
 import SummarySettingsPanel from '../components/settings/SummarySettingsPanel.vue'
+import ApiSettingsPanel from '../components/settings/ApiSettingsPanel.vue'
+import { ref } from 'vue'
+
+const activeTab = ref('general')
+function moveSettingsTab(event) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  const next = event.key === 'Home' || event.key === 'ArrowLeft' && activeTab.value === 'api' || event.key === 'ArrowRight' && activeTab.value === 'general'
+    ? 'general'
+    : 'api'
+  activeTab.value = next
+  document.getElementById(`settings-tab-${next}`)?.focus()
+}
 
 const {
   user,
@@ -50,10 +63,14 @@ const backupDate = value => new Intl.DateTimeFormat('es-ES', {
     <div>
       <p class="eyebrow">
         TU EXPERIENCIA
-      </p><h1>Ajustes</h1><p>Elige tus avisos y guarda copias de tus movimientos.</p>
+      </p><h1>Ajustes</h1><p>Configura tu cuenta y conecta tus atajos.</p>
     </div>
   </section>
-  <section class="settings-layout">
+  <nav class="settings-tabs" aria-label="Secciones de ajustes" role="tablist">
+    <button id="settings-tab-general" type="button" role="tab" :aria-selected="activeTab === 'general'" aria-controls="settings-general" :tabindex="activeTab === 'general' ? 0 : -1" @click="activeTab = 'general'" @keydown="moveSettingsTab">General</button>
+    <button id="settings-tab-api" type="button" role="tab" :aria-selected="activeTab === 'api'" aria-controls="settings-api" :tabindex="activeTab === 'api' ? 0 : -1" @click="activeTab = 'api'" @keydown="moveSettingsTab">API</button>
+  </nav>
+  <section v-if="activeTab === 'general'" id="settings-general" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-general">
     <form class="feature-panel feature-form settings-panel" aria-label="Preferencias de notificaciones de la aplicación" :aria-busy="notificationSaving" @submit.prevent="saveNotificationSettings">
       <div class="feature-panel-heading">
         <div>
@@ -237,5 +254,8 @@ const backupDate = value => new Intl.DateTimeFormat('es-ES', {
         </button>
       </div>
     </article>
+  </section>
+  <section v-else id="settings-api" class="settings-layout settings-api-layout" role="tabpanel" aria-labelledby="settings-tab-api">
+    <ApiSettingsPanel />
   </section>
 </template>
