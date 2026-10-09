@@ -3,10 +3,9 @@ import { useDataEditor } from '../composables/useDataEditor.js'
 import { useDataSearch } from '../composables/useDataSearch.js'
 import DataEditorDialog from '../components/dialogs/DataEditorDialog.vue'
 import DataSearch from '../components/forms/DataSearch.vue'
+import AutocompleteInput from '../components/inputs/AutocompleteInput.vue'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
-import { syncTypedOption } from '../utils/selects.js'
 import { PhPlus, PhLightning, PhMagnifyingGlass } from '@phosphor-icons/vue'
-import Multiselect from '@vueform/multiselect'
 
 const {
   saving,
@@ -116,34 +115,18 @@ const { editorOpen, openEditor, closeEditor, submitEditor } = useDataEditor({ re
           <span>Aplicar desde *</span><input v-model="recurringDraft.next_at" type="datetime-local" required />
         </label>
         <label>
-          <span id="recurring-place-label">Establecimiento</span><Multiselect id="recurring-place-select" v-model="recurringDraft.place"
-                                                   class="smart-select"
+          <span id="recurring-place-label">Establecimiento</span><AutocompleteInput id="recurring-place-select" v-model="recurringDraft.place"
                                                    :options="establishmentOptions"
                                                    :disabled="saving"
-                                                   searchable
-                                                   create-option
-                                                   allow-absent
-                                                   @search-change="query => syncTypedOption(recurringDraft, 'place', query, establishmentOptions)"
-                                                   :can-clear="Boolean(recurringDraft.place)"
-                                                   :aria="{ 'aria-label': 'Establecimiento', 'aria-labelledby': 'recurring-place-label' }"
+                                                   aria-label="Establecimiento"
                                                    placeholder="Busca o escribe un establecimiento"
-                                                   no-options-text="Escribe un establecimiento nuevo"
-                                                   no-results-text="Se guardará al guardar la programación"
           /></label>
         <label>
-          <span id="recurring-city-label">Ciudad</span><Multiselect id="recurring-city-select" v-model="recurringDraft.city"
-                                          class="smart-select"
+          <span id="recurring-city-label">Ciudad</span><AutocompleteInput id="recurring-city-select" v-model="recurringDraft.city"
                                           :options="cityOptions"
                                           :disabled="saving"
-                                          searchable
-                                          create-option
-                                          allow-absent
-                                          @search-change="query => syncTypedOption(recurringDraft, 'city', query, cityOptions)"
-                                          :can-clear="Boolean(recurringDraft.city)"
-                                          :aria="{ 'aria-label': 'Ciudad', 'aria-labelledby': 'recurring-city-label' }"
+                                          aria-label="Ciudad"
                                           placeholder="Busca o escribe una ciudad"
-                                          no-options-text="Escribe una ciudad nueva"
-                                          no-results-text="Se guardará al guardar la programación"
           /></label>
         <label class="feature-field-wide">
           <span>Detalles</span><textarea v-model="recurringDraft.details" maxlength="1000" rows="3" placeholder="Añade algún detalle (opcional)"></textarea>

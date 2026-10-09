@@ -2,6 +2,7 @@
 import { computed, watch } from 'vue'
 import { focusElement } from '../../utils/focus.js'
 import FormError from '../forms/FormError.vue'
+import AutocompleteInput from '../inputs/AutocompleteInput.vue'
 import BaseDialog from './BaseDialog.vue'
 import { normalizeName } from '../../utils/formatters.js'
 import { syncTypedOption } from '../../utils/selects.js'
@@ -231,7 +232,7 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
           <legend>Campos que se guardan automáticamente</legend>
           <div class="quick-template-setting">
             <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="name" /> Nombre del gasto</label>
-            <input v-model="quickTemplateDraft.name" :disabled="!quickTemplateDraft.fields.includes('name')" maxlength="160" placeholder="Comida, billete, café…" aria-label="Nombre del gasto rápido" />
+            <AutocompleteInput v-model="quickTemplateDraft.name" :options="frequentNames.map(item => item.name)" :disabled="!quickTemplateDraft.fields.includes('name')" :maxlength="160" placeholder="Comida, billete, café…" aria-label="Nombre del gasto rápido" />
           </div>
           <div class="quick-template-setting">
             <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="amount" /> Importe</label>
@@ -256,36 +257,20 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
           </div>
           <div class="quick-template-setting">
             <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="place" /> Establecimiento</label>
-            <Multiselect id="quick-template-place-select" v-model="quickTemplateDraft.place"
-                         class="smart-select"
+            <AutocompleteInput id="quick-template-place-select" v-model="quickTemplateDraft.place"
                          :options="establishmentOptions"
                          :disabled="!quickTemplateDraft.fields.includes('place')"
-                         searchable
-                         create-option
-                         allow-absent
-                         @search-change="query => syncTypedOption(quickTemplateDraft, 'place', query, establishmentOptions)"
-                         :can-clear="Boolean(quickTemplateDraft.place)"
-                         :aria="{ 'aria-label': 'Establecimiento del gasto rápido' }"
+                         aria-label="Establecimiento del gasto rápido"
                          placeholder="Busca o escribe un establecimiento"
-                         no-options-text="Escribe un establecimiento nuevo"
-                         no-results-text="Se guardará al guardar la plantilla"
             />
           </div>
           <div class="quick-template-setting">
             <label><input v-model="quickTemplateDraft.fields" type="checkbox" value="city" /> Ciudad</label>
-            <Multiselect id="quick-template-city-select" v-model="quickTemplateDraft.city"
-                         class="smart-select"
+            <AutocompleteInput id="quick-template-city-select" v-model="quickTemplateDraft.city"
                          :options="cityOptions"
                          :disabled="!quickTemplateDraft.fields.includes('city')"
-                         searchable
-                         create-option
-                         allow-absent
-                         @search-change="query => syncTypedOption(quickTemplateDraft, 'city', query, cityOptions)"
-                         :can-clear="Boolean(quickTemplateDraft.city)"
-                         :aria="{ 'aria-label': 'Ciudad del gasto rápido' }"
+                         aria-label="Ciudad del gasto rápido"
                          placeholder="Busca o escribe una ciudad"
-                         no-options-text="Escribe una ciudad nueva"
-                         no-results-text="Se guardará al guardar la plantilla"
             />
           </div>
           <div class="quick-template-setting">
@@ -367,10 +352,12 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
           </aside>
           <div class="form-grid">
             <label class="full name-field">
-              <span>Nombre del {{ draft.transaction_type === 'income' ? 'ingreso' : 'gasto' }} *</span><input id="expense-name" v-model="draft.name" :aria-label="draft.transaction_type === 'income' ? 'Nombre del ingreso' : 'Nombre del gasto'"
-                                                                                                              maxlength="160"
-                                                                                                              :placeholder="draft.transaction_type === 'income' ? 'Nómina, reembolso, venta…' : 'Cena, compra semanal, gasolina…'"
+              <span>Nombre del {{ draft.transaction_type === 'income' ? 'ingreso' : 'gasto' }} *</span><AutocompleteInput id="expense-name" v-model="draft.name"
+                                                                                                              :options="frequentNames.map(item => item.name)"
+                                                                                                              :aria-label="draft.transaction_type === 'income' ? 'Nombre del ingreso' : 'Nombre del gasto'"
+                                                                                                              :maxlength="160"
                                                                                                               :autofocus="!draft.id"
+                                                                                                              :placeholder="draft.transaction_type === 'income' ? 'Nómina, reembolso, venta…' : 'Cena, compra semanal, gasolina…'"
                                                                                                               required
               /><span class="frequent-names"><button v-for="suggestion in frequentNames"
                                                      :key="suggestion.name"
@@ -408,21 +395,11 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
             >
               <template #clear="{ clear }"><button type="button" class="accessible-select-clear" aria-label="Borrar categoría" @mousedown.prevent @click.stop="clear"><PhX aria-hidden="true" :size="18" /></button></template>
             </Multiselect></label>
-            <label><span id="expense-place-label">Establecimiento</span><Multiselect id="expense-place-select" v-model="draft.place"
-                                                            class="smart-select"
+            <label><span id="expense-place-label">Establecimiento</span><AutocompleteInput id="expense-place-select" v-model="draft.place"
                                                             :options="establishmentOptions"
-                                                            searchable
-                                                            create-option
-                                                            allow-absent
-                                                            @search-change="query => syncTypedOption(draft, 'place', query, establishmentOptions)"
-                                                            :can-clear="Boolean(draft.place)"
-                                                            :aria="{ 'aria-label': 'Establecimiento', 'aria-labelledby': 'expense-place-label' }"
+                                                            aria-label="Establecimiento"
                                                             placeholder="Busca o escribe un establecimiento"
-                                                            no-options-text="Escribe un establecimiento nuevo"
-                                                            no-results-text="Se añadirá al guardar"
-            >
-              <template #clear="{ clear }"><button type="button" class="accessible-select-clear" aria-label="Borrar establecimiento" @mousedown.prevent @click.stop="clear"><PhX aria-hidden="true" :size="18" /></button></template>
-            </Multiselect><template v-if="frequentEstablishments.length">
+            /><template v-if="frequentEstablishments.length">
               <span class="frequent-names"><button v-for="item in frequentEstablishments"
                                                    :key="item.value"
                                                    type="button"
@@ -430,21 +407,11 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
                                                    @click="draft.place = item.value"
               >{{ item.value }}<small v-if="item.count > 1">{{ item.count }}</small></button></span>
             </template></label>
-            <label><span id="expense-city-label">Ciudad</span><Multiselect id="expense-city-select" v-model="draft.city"
-                                                   class="smart-select"
+            <label><span id="expense-city-label">Ciudad</span><AutocompleteInput id="expense-city-select" v-model="draft.city"
                                                    :options="cityOptions"
-                                                   searchable
-                                                   create-option
-                                                   allow-absent
-                                                   @search-change="query => syncTypedOption(draft, 'city', query, cityOptions)"
-                                                   :can-clear="Boolean(draft.city)"
-                                                   :aria="{ 'aria-label': 'Ciudad', 'aria-labelledby': 'expense-city-label' }"
+                                                   aria-label="Ciudad"
                                                    placeholder="Busca o escribe una ciudad"
-                                                   no-options-text="Escribe una ciudad nueva"
-                                                   no-results-text="Se añadirá al guardar"
-            >
-              <template #clear="{ clear }"><button type="button" class="accessible-select-clear" aria-label="Borrar ciudad" @mousedown.prevent @click.stop="clear"><PhX aria-hidden="true" :size="18" /></button></template>
-            </Multiselect><template v-if="frequentCities.length">
+            /><template v-if="frequentCities.length">
               <span class="frequent-names"><button v-for="item in frequentCities"
                                                    :key="item.value"
                                                    type="button"
