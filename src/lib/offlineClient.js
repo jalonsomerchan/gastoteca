@@ -1,4 +1,4 @@
-import { offlineActions, projectOffline, resolveReferences, acknowledgeOfflineOperation } from '../domain/offline.js'
+import { offlineActions, projectOffline, resolveReferences, acknowledgeOfflineOperation, localStatistics } from '../domain/offline.js'
 
 const clone = value => structuredClone(value)
 const unavailable = reason => reason.status === 0 || reason.status >= 500 || reason.status === 408 || reason.status === 429
@@ -61,10 +61,22 @@ export function createOfflineClient({ uid, storage, transport, getToken, isOnlin
 
   function cached(document, path, options = {}) {
     const snapshot = projectOffline(document, uid)
-    const action = path.split('/').pop()
+    const [action, query = ''] = path.split('/').pop().split('?')
     if (action === 'group' && snapshot.group) return { group: snapshot.group }
     if (['bootstrap', 'expenses', 'expense_feed'].includes(action) && snapshot.group && snapshot.expenses) return { ...snapshot, user_uid: uid }
-    if (action === 'statistics' && snapshot.stats) return { stats: snapshot.stats }
+    if (action === 'statistics' && snapshot.stats) {
+      const params = new URLSearchParams(query)
+      const from = params.get('from') || ''
+      const to = params.get('to') || ''
+      if (from || to) {
+        const expenses = (snapshot.expenses || []).filter(item => {
+          const date = String(item.occurred_at || '').slice(0, 10)
+          return (!from || date >= from) && (!to || date <= to)
+        })
+        return { stats: localStatistics(expenses, { from, to, allExpenses: snapshot.expenses || [] }) }
+      }
+      return { stats: snapshot.stats }
+    }
     if (action === 'quick_expense_templates' && snapshot.group) return { templates: snapshot.templates || [] }
     if (action === 'notifications' && snapshot.group) return { notifications: snapshot.notifications || [], unread_count: snapshot.unread_count || 0 }
     if (snapshot[action]) return clone(snapshot[action])

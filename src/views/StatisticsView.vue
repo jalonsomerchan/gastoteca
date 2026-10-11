@@ -1,8 +1,9 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
 import StatsBreakdownCard from '../components/statistics/StatsBreakdownCard.vue'
 import { PhChartDonut } from '@phosphor-icons/vue'
+import { getJson } from '../lib/api.js'
 
 const {
   stats,
@@ -12,7 +13,63 @@ const {
   paymentMethodLabel,
   money,
   monthLabel,
+  freshToken,
 } = useGastotecaContext()
+
+const datePreset = ref('all')
+const fromDate = ref('')
+const toDate = ref('')
+const filtering = ref(false)
+const filterError = ref('')
+let filterRequestId = 0
+
+function localDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function selectedRange() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  if (datePreset.value === 'this-month') return { from: localDate(new Date(year, month, 1)), to: localDate(new Date(year, month + 1, 0)) }
+  if (datePreset.value === 'last-month') return { from: localDate(new Date(year, month - 1, 1)), to: localDate(new Date(year, month, 0)) }
+  if (datePreset.value === 'this-year') return { from: `${year}-01-01`, to: `${year}-12-31` }
+  if (datePreset.value === 'last-year') return { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` }
+  if (datePreset.value === 'custom') return { from: fromDate.value, to: toDate.value }
+  return null
+}
+
+async function refreshStats() {
+  const requestId = ++filterRequestId
+  filterError.value = ''
+  const range = selectedRange()
+  if (range && (!range.from || !range.to)) return
+  if (range && range.from > range.to) {
+    filterError.value = 'La fecha de inicio debe ser anterior a la fecha de fin.'
+    return
+  }
+
+  filtering.value = true
+  try {
+    const params = new URLSearchParams()
+    if (range) {
+      params.set('from', range.from)
+      params.set('to', range.to)
+    }
+    const token = await freshToken()
+    const query = params.toString()
+    const result = await getJson(`gastoteca/statistics${query ? `?${query}` : ''}`, token)
+    if (requestId === filterRequestId) stats.value = result.stats || stats.value
+  } catch (reason) {
+    if (requestId === filterRequestId) filterError.value = reason.message || 'No se pudieron cargar las estadísticas.'
+  } finally {
+    if (requestId === filterRequestId) filtering.value = false
+  }
+}
+
+watch([datePreset, fromDate, toDate], () => {
+  if (datePreset.value !== 'custom' || (fromDate.value && toDate.value)) refreshStats()
+})
 
 const titleStats = computed(() => (stats.value.by_title || []).map((item) => ({ ...item, key: item.title, label: item.title || 'Sin título' })))
 const establishmentStats = computed(() => (stats.value.by_establishment || []).map((item) => ({ ...item, key: item.establishment, label: item.establishment || 'Sin establecimiento' })))
@@ -27,6 +84,23 @@ const paymentMethodStats = computed(() => (stats.value.by_payment_method || []).
         UNA MIRADA AL CONJUNTO
       </p><h1>Estadísticas</h1><p>Desglosa los gastos por categoría, nombre, establecimiento, persona y método de pago.</p>
     </div>
+  </section>
+  <section class="stats-date-filter" aria-label="Filtrar estadísticas por fecha">
+    <label class="stats-date-preset"><span>Periodo</span><select v-model="datePreset" :disabled="filtering">
+      <option value="all">Todo el periodo</option>
+      <option value="this-month">Este mes</option>
+      <option value="last-month">Mes anterior</option>
+      <option value="this-year">Este año</option>
+      <option value="last-year">Año anterior</option>
+      <option value="custom">Personalizado</option>
+    </select></label>
+    <template v-if="datePreset === 'custom'">
+      <label><span>Desde</span><input v-model="fromDate" type="date" :max="toDate || undefined" :disabled="filtering"></label>
+      <label><span>Hasta</span><input v-model="toDate" type="date" :min="fromDate || undefined" :disabled="filtering"></label>
+    </template>
+    <span v-if="filtering" class="stats-filter-status" role="status">Actualizando…</span>
+    <p v-if="datePreset === 'custom' && (!fromDate || !toDate)" class="stats-filter-hint">Selecciona las dos fechas para aplicar el filtro.</p>
+    <p v-if="filterError" class="stats-filter-error" role="alert">{{ filterError }}</p>
   </section>
   <section class="stats-overview" aria-label="Resumen de gastos">
     <article class="stats-overview-card"><span>Gasto total</span><strong>{{ money(stats.total) }}</strong><small>{{ stats.count }} {{ stats.count === 1 ? 'gasto registrado' : 'gastos registrados' }}</small></article>

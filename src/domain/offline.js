@@ -42,8 +42,12 @@ export function movementFromDraft(body, group, uid, id, previous = {}) {
   }
 }
 
-export function localStatistics(expenses) {
-  const items = expenses.filter(item => item.transaction_type === 'expense' && !item.confirmation_pending)
+export function localStatistics(expenses, range = {}) {
+  const allItems = expenses.filter(item => item.transaction_type === 'expense' && !item.confirmation_pending)
+  const items = allItems.filter(item => {
+    const date = String(item.occurred_at || '').slice(0, 10)
+    return (!range.from || date >= range.from) && (!range.to || date <= range.to)
+  })
   const sum = values => values.reduce((total, item) => total + cents(item.amount), 0) / 100
   function breakdown(field, getKey, values = items) {
     const groups = new Map()
@@ -60,16 +64,17 @@ export function localStatistics(expenses) {
   const start = new Date(`${month}-01T12:00:00Z`)
   start.setUTCMonth(start.getUTCMonth() - 11)
   const total = sum(items)
+  const monthlyItems = range.from || range.to ? items : items.filter(item => item.occurred_at.slice(0, 10) >= start.toISOString().slice(0, 10))
   return {
     total, count: items.length, average: items.length ? total / items.length : 0,
-    current_month_total: sum(items.filter(item => item.occurred_at.slice(0, 7) === month)),
+    current_month_total: sum((range.allExpenses || allItems).filter(item => item.occurred_at.slice(0, 7) === month)),
     by_category: breakdown('category', item => item.category),
     by_member: breakdown('uid', item => item.paid_by_type === 'all' ? '' : item.paid_by_uid),
     by_participant: breakdown('uid', item => item.uid, items.flatMap(item => (item.participants || []).map(participant => ({ uid: participant.uid, amount: participant.share_amount })))),
     by_title: breakdown('title', item => item.name),
     by_establishment: breakdown('establishment', item => item.place || 'Sin establecimiento'),
     by_payment_method: breakdown('payment_method', item => item.payment_method),
-    monthly: breakdown('month', item => item.occurred_at.slice(0, 7), items.filter(item => item.occurred_at.slice(0, 10) >= start.toISOString().slice(0, 10))).sort((a, b) => a.month.localeCompare(b.month)),
+    monthly: breakdown('month', item => item.occurred_at.slice(0, 7), monthlyItems).sort((a, b) => a.month.localeCompare(b.month)),
   }
 }
 

@@ -128,8 +128,8 @@ onMounted(loadKeys)
         </dl>
         <h4>Campos del gasto</h4>
         <div class="api-docs-table-wrap"><table class="api-docs-table"><thead><tr><th>Campo</th><th>Tipo</th><th>Uso</th></tr></thead><tbody>
-          <tr><td><code>name</code></td><td>texto, obligatorio</td><td>Concepto (hasta 160 caracteres).</td></tr>
-          <tr><td><code>amount</code></td><td>número, obligatorio</td><td>Importe positivo en euros, hasta dos decimales.</td></tr>
+          <tr><td><code>name</code></td><td>texto, opcional</td><td>Concepto (hasta 160 caracteres). Si se omite o está vacío, se guarda como <code>Gasto</code>.</td></tr>
+          <tr><td><code>amount</code></td><td>número o texto, obligatorio</td><td>Importe positivo en euros, hasta dos decimales. Acepta punto o coma decimal, por ejemplo <code>10.02</code> o <code>"10,02"</code>; con coma decimal también admite puntos de miles como <code>"1.234,56"</code>.</td></tr>
           <tr><td><code>category</code></td><td>texto</td><td>Clave de categoría del grupo; por defecto <code>other</code>. Ejemplos: <code>food</code>, <code>home</code>, <code>transport</code>, <code>leisure</code>, <code>health</code>, <code>shopping</code>, <code>bills</code>, <code>travel</code>.</td></tr>
           <tr><td><code>occurred_at</code></td><td>fecha y hora</td><td><code>YYYY-MM-DD HH:mm:ss</code> o <code>YYYY-MM-DDTHH:mm:ss</code>, en hora local de Madrid. Por defecto, ahora.</td></tr>
           <tr><td><code>details</code></td><td>texto</td><td>Notas (hasta 1000 caracteres).</td></tr>
