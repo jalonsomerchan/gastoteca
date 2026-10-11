@@ -17,7 +17,8 @@ const emit = defineEmits(['update:modelValue'])
 const isOpen = ref(false)
 const activeIndex = ref(-1)
 const closeTimer = ref(0)
-const listId = useId()
+const generatedListId = useId()
+const listId = props.id ? `${props.id}-multiselect-options` : generatedListId
 
 onBeforeUnmount(() => window.clearTimeout(closeTimer.value))
 watch(activeIndex, async (index) => {
