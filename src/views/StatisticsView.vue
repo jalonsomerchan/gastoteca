@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
 import StatsBreakdownCard from '../components/statistics/StatsBreakdownCard.vue'
 import { PhChartDonut } from '@phosphor-icons/vue'
@@ -67,9 +67,17 @@ async function refreshStats() {
   }
 }
 
-watch([datePreset, fromDate, toDate], () => {
-  if (datePreset.value !== 'custom' || (fromDate.value && toDate.value)) refreshStats()
-})
+function applyPreset() {
+  const range = selectedRange()
+  fromDate.value = range?.from || ''
+  toDate.value = range?.to || ''
+  refreshStats()
+}
+
+function applyCustomRange() {
+  datePreset.value = 'custom'
+  refreshStats()
+}
 
 const titleStats = computed(() => (stats.value.by_title || []).map((item) => ({ ...item, key: item.title, label: item.title || 'Sin título' })))
 const establishmentStats = computed(() => (stats.value.by_establishment || []).map((item) => ({ ...item, key: item.establishment, label: item.establishment || 'Sin establecimiento' })))
@@ -86,7 +94,7 @@ const paymentMethodStats = computed(() => (stats.value.by_payment_method || []).
     </div>
   </section>
   <section class="stats-date-filter" aria-label="Filtrar estadísticas por fecha">
-    <label class="stats-date-preset"><span>Periodo</span><select v-model="datePreset" :disabled="filtering">
+    <label class="stats-date-preset"><span>Periodo</span><select v-model="datePreset" :disabled="filtering" @change="applyPreset">
       <option value="all">Todo el periodo</option>
       <option value="this-month">Este mes</option>
       <option value="last-month">Mes anterior</option>
@@ -94,10 +102,8 @@ const paymentMethodStats = computed(() => (stats.value.by_payment_method || []).
       <option value="last-year">Año anterior</option>
       <option value="custom">Personalizado</option>
     </select></label>
-    <template v-if="datePreset === 'custom'">
-      <label><span>Desde</span><input v-model="fromDate" type="date" :max="toDate || undefined" :disabled="filtering"></label>
-      <label><span>Hasta</span><input v-model="toDate" type="date" :min="fromDate || undefined" :disabled="filtering"></label>
-    </template>
+    <label><span>Desde</span><input v-model="fromDate" type="date" :max="toDate || undefined" :disabled="filtering" @change="applyCustomRange"></label>
+    <label><span>Hasta</span><input v-model="toDate" type="date" :min="fromDate || undefined" :disabled="filtering" @change="applyCustomRange"></label>
     <span v-if="filtering" class="stats-filter-status" role="status">Actualizando…</span>
     <p v-if="datePreset === 'custom' && (!fromDate || !toDate)" class="stats-filter-hint">Selecciona las dos fechas para aplicar el filtro.</p>
     <p v-if="filterError" class="stats-filter-error" role="alert">{{ filterError }}</p>
