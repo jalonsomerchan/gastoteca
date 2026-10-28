@@ -505,7 +505,7 @@ export function useExpenses({
     tagInput.value = ''
   }
 
-  async function saveExpense() {
+  async function saveExpense(confirmAfterSave = false) {
     if (saving.value) return
     error.value = ''
     if (!draft.transaction_type) {
@@ -546,9 +546,19 @@ export function useExpenses({
       stats.value = data.stats
       settlements.value = data.settlements || settlements.value
       if (data.group) group.value = data.group
-      closeExpenseModal()
-      const movement = draft.transaction_type === 'income' ? 'Ingreso' : 'Gasto'
-      flash(draft.id ? `${movement} actualizado.` : `${movement} añadido.`)
+      if (confirmAfterSave) {
+        const confirmed = await postJson('gastoteca/confirm_expense', await freshToken(true), { id: draft.id })
+        expenses.value = confirmed.expenses || expenses.value
+        stats.value = confirmed.stats || stats.value
+        if (confirmed.group) group.value = confirmed.group
+        closeExpenseModal()
+        await loadNotifications()
+        flash('Movimiento confirmado y compartido con el grupo.')
+      } else {
+        closeExpenseModal()
+        const movement = draft.transaction_type === 'income' ? 'Ingreso' : 'Gasto'
+        flash(draft.id ? `${movement} actualizado.` : `${movement} añadido.`)
+      }
     } catch (reason) {
       error.value = reason.message
     } finally {
@@ -577,24 +587,5 @@ export function useExpenses({
     }
   }
 
-  async function confirmExpense(expenseId) {
-    if (saving.value) return
-    saving.value = true
-    error.value = ''
-    try {
-      const data = await postJson('gastoteca/confirm_expense', await freshToken(true), { id: expenseId })
-      expenses.value = data.expenses || expenses.value
-      stats.value = data.stats || stats.value
-      if (data.group) group.value = data.group
-      closeExpenseModal()
-      await loadNotifications()
-      flash('Movimiento confirmado y compartido con el grupo.')
-    } catch (reason) {
-      error.value = reason.message
-    } finally {
-      saving.value = false
-    }
-  }
-
-  return { openExpense, closeExpenseModal, loadExpenseHistory, historyChangeEntries, historyValue, startQuickExpense, saveQuickExpense, ownedQuickExpenseTemplates, canEditQuickExpenseTemplate, openQuickTemplateEditor, saveQuickExpenseTemplate, saveQuickExpenseTemplates, cancelQuickTemplateEditor, applyQuickExpenseTemplate, saveQuickExpenseTemplatePrompt, deleteQuickExpenseTemplate, selectFrequentName, setShareMode, shareValue, addDraftTag, saveExpense, confirmExpense, removeExpense }
+  return { openExpense, closeExpenseModal, loadExpenseHistory, historyChangeEntries, historyValue, startQuickExpense, saveQuickExpense, ownedQuickExpenseTemplates, canEditQuickExpenseTemplate, openQuickTemplateEditor, saveQuickExpenseTemplate, saveQuickExpenseTemplates, cancelQuickTemplateEditor, applyQuickExpenseTemplate, saveQuickExpenseTemplatePrompt, deleteQuickExpenseTemplate, selectFrequentName, setShareMode, shareValue, addDraftTag, saveExpense, removeExpense }
 }

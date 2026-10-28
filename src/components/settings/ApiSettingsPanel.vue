@@ -17,7 +17,6 @@ const endpoint = `${API_BASE}/gastoteca/v1/expenses`
 const sample = `curl -X POST '${endpoint}' \\
   -H 'Authorization: Bearer TU_CLAVE' \\
   -H 'Content-Type: application/json' \\
-  -H 'Idempotency-Key: atajo-2026-10-09-1234' \\
   -d '{"name":"Café","amount":2.50,"category":"food","place":"Cafetería","paid_by_uid":"UID_DEL_PAGADOR","applies_to_all":true}'`
 
 async function loadKeys() {
@@ -124,7 +123,7 @@ onMounted(loadKeys)
           <div><dt>Método y URL</dt><dd><code>POST {{ endpoint }}</code></dd></div>
           <div><dt>Autenticación</dt><dd><code>Authorization: Bearer TU_CLAVE</code></dd></div>
           <div><dt>Formato</dt><dd><code>Content-Type: application/json</code></dd></div>
-          <div><dt>Reintentos seguros</dt><dd>Envía un <code>Idempotency-Key</code> único por gasto (máximo 100 caracteres). Si repites la petición con la misma clave, devuelve el gasto original sin duplicarlo. Conserva la clave durante 30 días.</dd></div>
+          <div><dt>Peticiones repetidas</dt><dd>Cada petición válida crea un gasto nuevo, aunque repita los mismos datos. La cabecera <code>Idempotency-Key</code> se ignora y puede omitirse. Reintentar una petición ya guardada crea otro gasto.</dd></div>
         </dl>
         <h4>Campos del gasto</h4>
         <div class="api-docs-table-wrap"><table class="api-docs-table"><thead><tr><th>Campo</th><th>Tipo</th><th>Uso</th></tr></thead><tbody>
@@ -148,7 +147,7 @@ onMounted(loadKeys)
           <div v-for="member in group.members" :key="member.uid" class="api-member-uid"><span><strong>{{ member.name || member.email }}</strong><code>{{ member.uid }}</code></span><button type="button" class="ghost small-action" :aria-label="`Copiar UID de ${member.name || member.email}`" @click="copy(member.uid, 'UID copiado.')"><PhCopy aria-hidden="true" :size="15" /> Copiar UID</button></div>
         </div>
         <h4>Ejemplo para Atajos de iPhone</h4>
-        <p>En Atajos, crea un diccionario con los campos del ejemplo y usa «Obtener contenido de URL»: método POST, cuerpo JSON y encabezados <code>Authorization</code> y <code>Idempotency-Key</code>. Usa un identificador nuevo para cada ejecución.</p>
+        <p>En Atajos, crea un diccionario con los campos del ejemplo y usa «Obtener contenido de URL»: método POST, cuerpo JSON y encabezado <code>Authorization</code>. Cada ejecución crea un gasto nuevo.</p>
         <div class="api-code"><pre><code>{{ sample }}</code></pre><button type="button" class="ghost small-action" @click="copy(sample, 'Ejemplo copiado.')"><PhCopy aria-hidden="true" :size="16" /> Copiar ejemplo</button></div>
         <p class="feature-hint">Respuesta correcta: <code>{ "ok": true, "data": { "expense": { … } } }</code>. Los errores incluyen <code>ok: false</code>, un código estable y un mensaje. Los importes, fechas y repartos se validan igual que al guardar desde la aplicación. Mantén la clave privada: cualquier persona que la tenga podrá crear gastos en este grupo.</p>
       </div>

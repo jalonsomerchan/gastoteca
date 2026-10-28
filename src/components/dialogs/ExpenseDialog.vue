@@ -60,7 +60,6 @@ const {
   shareValue,
   addDraftTag,
   saveExpense,
-  confirmExpense,
 } = useGastotecaContext()
 const activeQuickExpenseTemplates = computed(() => quickExpenseTemplates.value
   .map((template, index) => ({ template, index, order: template.sort_order === undefined ? index : Number(template.sort_order) }))
@@ -510,30 +509,31 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
               </select>
             </label>
           </div>
-          <div v-if="draft.confirmation_pending && draft.created_by === user?.uid" class="confirmation-action-row">
-            <button type="button"
-                    class="secondary confirmation-action"
-                    :disabled="saving"
-                    @click="confirmExpense(draft.id)"
-            >
-              <PhCheck aria-hidden="true" :size="18" weight="bold" /> {{ saving ? 'Confirmando…' : 'Confirmar movimiento' }}
-            </button>
-          </div>
           <footer class="expense-form-footer">
-            <button v-if="draft.id"
+            <button v-if="draft.confirmation_pending && draft.created_by === user?.uid"
                     type="button"
-                    class="danger-button modal-delete"
-                    :aria-label="`Eliminar ${draft.transaction_type === 'income' ? 'ingreso' : 'gasto'}`"
-                    :title="`Eliminar ${draft.transaction_type === 'income' ? 'ingreso' : 'gasto'}`"
+                    class="primary expense-save-confirm"
                     :disabled="saving"
-                    @click="deleteTarget = { id: draft.id, name: draft.name, transaction_type: draft.transaction_type }"
+                    @click="saveExpense(true)"
             >
-              <PhTrash aria-hidden="true" :size="20" />
-            </button><button type="button" class="ghost" :disabled="saving" @click="closeExpenseModal">
-              Cancelar
-            </button><button class="primary" :disabled="saving">
-              <PhCheck aria-hidden="true" :size="18" weight="bold" /> {{ saving ? 'Guardando…' : 'Guardar' }}
+              <PhCheck aria-hidden="true" :size="18" weight="bold" /> {{ saving ? 'Guardando y confirmando…' : 'Guardar y confirmar' }}
             </button>
+            <div class="expense-form-footer-actions">
+              <button v-if="draft.id"
+                      type="button"
+                      class="danger-button modal-delete"
+                      :aria-label="`Eliminar ${draft.transaction_type === 'income' ? 'ingreso' : 'gasto'}`"
+                      :title="`Eliminar ${draft.transaction_type === 'income' ? 'ingreso' : 'gasto'}`"
+                      :disabled="saving"
+                      @click="deleteTarget = { id: draft.id, name: draft.name, transaction_type: draft.transaction_type }"
+              >
+                <PhTrash aria-hidden="true" :size="20" />
+              </button><button type="button" class="ghost" :disabled="saving" @click="closeExpenseModal">
+                Cancelar
+              </button><button class="primary" :disabled="saving">
+                <PhCheck aria-hidden="true" :size="18" weight="bold" /> {{ saving ? 'Guardando…' : 'Guardar' }}
+              </button>
+            </div>
           </footer>
         </template>
       </form>

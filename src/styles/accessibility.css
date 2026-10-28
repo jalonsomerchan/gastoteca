@@ -44,6 +44,8 @@ input[type='checkbox'], input[type='radio'] { flex-shrink: 0; }
 .expense-card .expense-people > small { display: inline; min-width: 0; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
 .expense-card .expense-people-separator { color: var(--muted); }
 .expense-card-new { border-color: #a9cbb5; background: #fcfffc; }
+.expense-card-confirmation-pending { border-color: #ead9ac; background: #fff9e9; }
+.expense-card .category-icon { align-self: start; }
 .unseen-expense-pill { display: inline-block; margin-left: .35rem; padding: .16rem .42rem; color: #246347; background: #e5f2e8; border-radius: 999px; font-family: 'DM Sans', sans-serif; font-size: .58rem; font-style: normal; font-weight: 800; letter-spacing: .02em; vertical-align: .12rem; }
 .new-expense-notice { margin: 0 0 .65rem; padding: .65rem .85rem; color: #315c45; background: #edf6ef; border: 1px solid #d3e7d8; border-radius: 12px; font-size: .76rem; line-height: 1.4; }
 .expense-amount.paid-by-current { color: var(--green); }
@@ -104,10 +106,12 @@ input[type='checkbox'], input[type='radio'] { flex-shrink: 0; }
 .dialog-host .form-error { margin: 1rem 1.6rem; }
 .dialog-host .confirm-dialog .form-error { margin-inline: 0; }
 .dialog-host .modal footer { position: sticky; bottom: -1px; z-index: 2; flex-wrap: wrap; background: #fafaf7; padding-block: 1rem; }
-.dialog-host .modal footer.expense-form-footer { flex-wrap: nowrap; align-items: center; gap: .4rem; }
-.dialog-host .modal footer.expense-form-footer > .modal-delete { display: grid; flex: 0 0 44px; place-items: center; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; margin: 0 auto 0 0; border-radius: 12px; }
-.dialog-host .modal footer.expense-form-footer > .ghost { flex: 0 0 auto; padding-inline: .7rem; font-size: .875rem; white-space: nowrap; }
-.dialog-host .modal footer.expense-form-footer > .primary { flex: 1 1 auto; min-width: 0; padding-inline: .7rem; font-size: .875rem; white-space: nowrap; }
+.dialog-host .modal footer.expense-form-footer { display: flex; flex-direction: column; align-items: stretch; gap: .6rem; }
+.dialog-host .modal footer.expense-form-footer .expense-save-confirm { width: 100%; }
+.dialog-host .modal footer .expense-form-footer-actions { display: flex; align-items: center; gap: .4rem; }
+.dialog-host .modal footer.expense-form-footer .modal-delete { display: grid; flex: 0 0 44px; place-items: center; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; margin: 0 auto 0 0; border-radius: 12px; }
+.dialog-host .modal footer.expense-form-footer .ghost { flex: 0 0 auto; padding-inline: .7rem; font-size: .875rem; white-space: nowrap; }
+.dialog-host .modal .expense-form-footer-actions .primary { flex: 1 1 auto; min-width: 0; padding-inline: .7rem; font-size: .875rem; white-space: nowrap; }
 .dialog-host .modal>header, .icon-picker-header { align-items: center; gap: 1rem; }
 .dialog-host .modal-title { line-height: 1.2; }
 .dialog-host .icon-picker-modal { width: min(100%, 960px); }
@@ -136,7 +140,7 @@ input[type='checkbox'], input[type='radio'] { flex-shrink: 0; }
   .dialog-host>:is(.modal, .confirm-dialog, .icon-picker-modal) { border-radius: 20px; max-height: 100%; }
   .dialog-host .modal footer { gap: .5rem; padding-bottom: max(.75rem, env(safe-area-inset-bottom)); }
   .dialog-host .modal footer>button { flex: 1 1 auto; }
-  .dialog-host .modal footer>.modal-delete { flex-basis: 100%; margin-right: 0; }
+  .dialog-host .modal footer .expense-form-footer-actions>.modal-delete { flex-basis: 44px; margin-right: 0; }
   .dialog-host .form-error { margin-inline: 1rem; }
   .expense-card { grid-template-columns: 40px minmax(0, 1fr) auto; gap: .65rem; }
   .expense-card .expense-amount { grid-column: 3; grid-row: 1; align-self: start; text-align: right; white-space: nowrap; }

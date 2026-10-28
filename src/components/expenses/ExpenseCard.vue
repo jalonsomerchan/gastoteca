@@ -29,7 +29,7 @@ const amountTone = computed(() => {
 
 <template>
   <article class="expense-card"
-           :class="{ 'expense-card-new': isNew }"
+           :class="{ 'expense-card-new': isNew, 'expense-card-confirmation-pending': expense.confirmation_pending }"
            role="button"
            tabindex="0"
            :aria-label="`Editar movimiento: ${expense.name}`"
