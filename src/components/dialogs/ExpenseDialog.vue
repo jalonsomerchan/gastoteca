@@ -315,7 +315,7 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
           <button type="button" class="primary" :disabled="saving" @click="saveQuickExpenseTemplate"><PhCheck aria-hidden="true" :size="18" weight="bold" /> {{ saving ? 'Guardando…' : 'Guardar gasto rápido' }}</button>
         </footer>
       </section>
-      <form :aria-busy="saving" v-else @submit.prevent="saveExpense">
+      <form :aria-busy="saving" v-else @submit.prevent="saveExpense()">
         <fieldset v-if="!draft.id && !draft.transaction_type" class="transaction-type" aria-label="Tipo de movimiento">
           <div class="choice-grid transaction-options">
             <label :class="{ selected: draft.transaction_type === 'expense' }">
