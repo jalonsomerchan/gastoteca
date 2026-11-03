@@ -30,15 +30,12 @@ export function useGroupCatalogs({ group, user, stats, draft, recurringDraft, de
 
   const splitMembers = computed(() => {
     const participants = [...(draft.applies_to_all ? memberOptions.value : memberOptions.value.filter((member) => draft.participant_uids.includes(member.uid)))].sort((a, b) => a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0)
-    return draft.transaction_type === 'income' && draft.paid_by_type === 'person'
-      ? participants.filter((member) => member.uid !== draft.paid_by_uid)
-      : participants
+    return participants
   })
 
   const recurringSplitMembers = computed(() => {
     const participants = [...(recurringDraft.applies_to_all ? memberOptions.value : memberOptions.value.filter((member) => recurringDraft.participant_uids.includes(member.uid)))].sort((a, b) => a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0)
-    return recurringDraft.transaction_type === 'income'
-      ? participants.filter(member => member.uid !== recurringDraft.paid_by_uid) : participants
+    return participants
   })
 
   const cityOptions = computed(() => [...new Set([

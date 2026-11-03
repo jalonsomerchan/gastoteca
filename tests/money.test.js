@@ -84,8 +84,23 @@ test('offline incomes use the same recipient and participant rules as the server
   const income = movementFromDraft({ ...draft, transaction_type: 'income', paid_by_type: 'all', paid_by_uid: '' }, group, 'a', 1)
   assert.equal(income.paid_by_type, 'person')
   assert.equal(income.paid_by_uid, 'a')
-  assert.deepEqual(income.participant_uids, ['b', 'c', 'd'])
+  assert.deepEqual(income.participant_uids, ['a', 'b', 'c', 'd'])
   assert.equal(sumMoney(income.participants.map(participant => participant.share_amount)), 0.02)
+})
+
+test('income includes the recipient share without redistributing it to other people in the balance', () => {
+  const income = movementFromDraft({ ...draft, transaction_type: 'income', paid_by_uid: 'a', amount: '10.00' }, group, 'a', 1)
+  assert.deepEqual(income.participants.map(participant => participant.share_amount), [2.5, 2.5, 2.5, 2.5])
+  const expenses = ref([
+    ...['b', 'c', 'd'].map(paid_by_uid => ({ transaction_type: 'expense', paid_by_type: 'person', paid_by_uid, amount: 10, participants: [{ uid: 'a', share_amount: 10 }] })),
+    income,
+  ])
+  const balance = useBalances({ expenses, settlements: ref([]), user: ref({ uid: 'a' }) })
+  assert.equal(balance.balanceSummary.value.youOwe, 22.5)
+  const personal = movementFromDraft({ ...draft, transaction_type: 'income', applies_to_all: false, participant_uids: ['a'], amount: '10.00' }, group, 'a', 2)
+  assert.deepEqual(personal.participants, [{ uid: 'a', share_amount: 10 }])
+  expenses.value = [personal]
+  assert.deepEqual(balance.pairBalances.value, [])
 })
 
 test('nonfinancial edits retain stored allocations when percentages cannot reproduce the original cents', () => {

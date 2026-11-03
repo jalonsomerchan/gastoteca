@@ -21,6 +21,34 @@ check(isset($split('0.01', array('a', 'b'), 'amount', array('a' => '0.005', 'b' 
 check(isset($split('1.00', array('a', 'b'), 'percent', array('a' => '50.001', 'b' => '49.999'))['error']), 'Percentages have at most two decimals');
 check(isset($split('1.00', array())['error']), 'Empty participants cannot divide by zero');
 
+// Stop at the first write boundary: exercise the real endpoint validation
+// without writing movements or recurring rules to any account.
+class IncomeValidationPassed extends RuntimeException {}
+class IncomeValidationConnection extends TemplateTestConnection
+{
+    public $recurringPayload;
+    public function begin_transaction() { throw new IncomeValidationPassed(); }
+    public function execute($sql, $values) {
+        if (strpos($sql, 'INSERT INTO mg_recurring_expenses') === 0) {
+            $this->recurringPayload = json_decode($values[2], true);
+            throw new IncomeValidationPassed();
+        }
+        return parent::execute($sql, $values);
+    }
+}
+$incomeStorage = new IncomeValidationConnection();
+$incomeApi = apiFor('alice', $incomeStorage);
+foreach (array(true, false) as $all) {
+    $_POST = array('transaction_type' => 'income', 'name' => 'Ingreso', 'amount' => '10.00', 'paid_by_uid' => 'alice', 'applies_to_all' => $all, 'participant_uids' => array('alice'), 'share_mode' => 'percent', 'participant_shares' => $all ? array('alice' => 50, 'bob' => 50) : array('alice' => 100), 'frequency' => 'monthly', 'next_at' => '2099-11-03T12:00');
+    foreach (array('save_expense', 'save_recurring') as $endpoint) {
+        try {
+            $incomeApi->$endpoint();
+            check(false, 'Income endpoint rejected a valid recipient-inclusive split: ' . $endpoint);
+        } catch (IncomeValidationPassed $expected) {}
+    }
+    check($incomeStorage->recurringPayload['participant_uids'] === ($all ? array('alice', 'bob') : array('alice')), 'Recurring income preserves the selected recipient');
+}
+
 $preserve = new ReflectionMethod('mistergastos', 'preservedParticipantShares'); $preserve->setAccessible(true);
 $original = array('share_mode' => 'percent', 'transaction_type' => 'expense', 'amount' => 999999.99, 'participants' => array(array('uid' => 'alice', 'share_amount' => 333333.33), array('uid' => 'bob', 'share_amount' => 666666.66)));
 check($preserve->invoke($api, $original, 999999.99, array('alice', 'bob'), 'percent', 'expense') === array('alice' => 333333.33, 'bob' => 666666.66), 'Nonfinancial edits preserve large original cent allocations');
@@ -103,5 +131,10 @@ $storage->participants = array(array('expense_id' => 3, 'uid' => 'bob', 'share_a
 $storage->settlements = array(array_merge($settlement, array('amount' => 0.01)));
 $pairs = $pairsMethod->invoke($api, 1);
 check(count($pairs) === 1 && $pairs[0]['debtor_uid'] === 'bob' && $pairs[0]['amount'] === 0.01, 'Income must never erase a recorded transfer after the original expense is removed');
+$storage->expenses = array(array_merge($base, array('id' => 1, 'transaction_type' => 'expense', 'amount' => 10, 'paid_by_uid' => 'bob')), array_merge($base, array('id' => 2, 'transaction_type' => 'income', 'amount' => 10, 'paid_by_uid' => 'alice')));
+$storage->participants = array(array('expense_id' => 1, 'uid' => 'alice', 'share_amount' => 10), array('expense_id' => 2, 'uid' => 'alice', 'share_amount' => 5), array('expense_id' => 2, 'uid' => 'bob', 'share_amount' => 5));
+$storage->settlements = array();
+$pairs = $pairsMethod->invoke($api, 1);
+check(count($pairs) === 1 && $pairs[0]['amount'] === 5, 'Recipient share must not be reassigned to other participants in income balances');
 
 echo "Money parsing, 10,000 allocations, shares, write validation and exact balances passed.\n";

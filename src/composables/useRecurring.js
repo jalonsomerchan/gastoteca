@@ -94,7 +94,7 @@ export function useRecurring({
       return false
     }
     if (!recurringSplitMembers.value.length) {
-      error.value = 'Selecciona al menos a otra persona a quien aplicar el ingreso.'
+      error.value = 'Selecciona al menos una persona para repartir el movimiento.'
       return false
     }
     if (recurringDraft.share_mode !== 'equal') {

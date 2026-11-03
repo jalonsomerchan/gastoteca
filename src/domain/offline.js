@@ -31,9 +31,7 @@ export function movementFromDraft(body, group, uid, id, previous = {}) {
   const participantUids = appliesToAll ? group.members.map(member => member.uid)
     : [...new Set(body.participant_uids || [])].filter(uid => group.members.some(member => member.uid === uid))
   participantUids.sort()
-  const uids = transactionType === 'income'
-    ? participantUids.filter(memberUid => memberUid !== paidByUid)
-    : participantUids
+  const uids = participantUids
   const total = cents(body.amount)
   const percentShares = body.share_mode === 'percent'
     ? allocateUnits(total, uids.map(memberUid => cents(body.participant_shares?.[memberUid] || 0))) : []

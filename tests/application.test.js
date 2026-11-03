@@ -846,6 +846,43 @@ test('equal editor shows stored cents and new small splits always sum to their a
   assert.equal(editor.shareValue(bob, 1), '0.02')
 })
 
+test('income modal includes and enables the recipient when applied to the entire group', async () => {
+  const html = await renderComponent('/src/components/dialogs/ExpenseDialog.vue', 'expenses', app => {
+    app.openExpense()
+    app.draft.transaction_type = 'income'
+    app.draft.paid_by_uid = 'alice'
+    app.draft.amount = '10.00'
+    app.draft.applies_to_all = true
+    assert.deepEqual(app.splitMembers.value.map(member => member.uid), ['alice', 'bob'])
+  })
+  assert.match(html, /<input[^>]*type="checkbox"[^>]*checked[^>]*aria-label="Incluir a Alicia"/)
+  assert.doesNotMatch(html, /Quien ingresa el dinero no recibe una parte/)
+  assert.doesNotMatch(html, /<input[^>]*disabled[^>]*aria-label="Incluir a Alicia"/)
+})
+
+test('income and recurring income can apply only to the recipient, including in a one-member group', async t => {
+  let payload
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    payload = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ data: { expenses: [], stats: {}, group: { members: [alice] } } }) }
+  })
+  const editor = expenseEditor()
+  editor.group.value.members = [alice]
+  editor.openExpense()
+  Object.assign(editor.draft, { transaction_type: 'income', name: 'Ingreso propio', amount: '0.01' })
+  await editor.saveExpense()
+  assert.deepEqual(payload.participant_shares, { alice: 0.01 })
+  const state = createGastotecaState()
+  populate(state)
+  state.group.value.members = [alice]
+  const catalog = useGroupCatalogs(state)
+  const recurring = useRecurring({ ...state, ...catalog, freshToken: async () => 'test-token', flash: () => {}, loadNotifications: async () => {} })
+  recurring.startRecurringRule()
+  Object.assign(state.recurringDraft, { transaction_type: 'income', name: 'Ingreso mensual', amount: '0.01' })
+  assert.equal(await recurring.saveRecurring(), true)
+  assert.deepEqual(payload.participant_shares, { alice: 0.01 })
+})
+
 test('split summary never describes fractional cents as a complete split', async () => {
   const html = await renderComponent('/src/components/dialogs/ExpenseDialog.vue', 'expenses', app => {
     app.openExpense(expense)

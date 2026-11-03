@@ -23,7 +23,7 @@ export function useBalances({ expenses, settlements, user, serverPairBalances })
         ? (expense.paid_by_type === 'person' && expense.paid_by_uid ? expense.paid_by_uid : expense.created_by)
         : ''
       if (transactionType === 'income' && !incomeEnteredBy) return
-      const participants = (expense.participants || []).filter((participant) => transactionType !== 'income' || participant.uid !== incomeEnteredBy)
+      const participants = [...(expense.participants || [])]
         .sort((a, b) => a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0)
       const incomeWeights = participants.map(participant => Math.max(0, toCents(participant.share_amount || 0)))
       const incomeShares = transactionType === 'income'
