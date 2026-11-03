@@ -3,6 +3,7 @@ import { computed } from 'vue'
 export function useBalances({ expenses, settlements, user }) {
   const pairBalances = computed(() => {
     const balances = new Map()
+    const incomeCredits = new Map()
     const keyFor = (debtor, creditor) => `${debtor}::${creditor}`
     expenses.value.forEach((expense) => {
       if (expense.confirmation_pending) return
@@ -27,7 +28,11 @@ export function useBalances({ expenses, settlements, user }) {
         const key = keyFor(firstUid, secondUid)
         const sign = transactionType === 'income' ? -1 : 1
         const shareAmount = Number(participant.share_amount || 0) * (transactionType === 'income' ? incomeShareScale : 1)
-        balances.set(key, (balances.get(key) || 0) + sign * shareAmount)
+        if (transactionType === 'income') {
+          incomeCredits.set(key, (incomeCredits.get(key) || 0) + shareAmount)
+        } else {
+          balances.set(key, (balances.get(key) || 0) + sign * shareAmount)
+        }
       })
     })
     settlements.value.forEach((settlement) => {
@@ -46,6 +51,9 @@ export function useBalances({ expenses, settlements, user }) {
       balances.set(reverseKey, Math.max(0, -net))
       handled.add(key)
       handled.add(reverseKey)
+    })
+    incomeCredits.forEach((amount, key) => {
+      balances.set(key, Math.max(0, (balances.get(key) || 0) - amount))
     })
     return [...balances.entries()].filter(([, amount]) => amount > 0.004).map(([key, amount]) => {
       const [debtorUid, creditorUid] = key.split('::')
