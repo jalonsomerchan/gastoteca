@@ -5,11 +5,14 @@ export function useBalances({ expenses, settlements, user }) {
     const balances = new Map()
     const keyFor = (debtor, creditor) => `${debtor}::${creditor}`
     expenses.value.forEach((expense) => {
-      if (expense.confirmation_pending || (expense.transaction_type || 'expense') !== 'expense' || expense.paid_by_type !== 'person' || !expense.paid_by_uid) return
+      if (expense.confirmation_pending || expense.paid_by_type !== 'person' || !expense.paid_by_uid) return
+      const transactionType = expense.transaction_type || 'expense'
+      if (transactionType !== 'expense' && transactionType !== 'income') return
       ;(expense.participants || []).forEach((participant) => {
         if (participant.uid === expense.paid_by_uid) return
         const key = keyFor(participant.uid, expense.paid_by_uid)
-        balances.set(key, (balances.get(key) || 0) + Number(participant.share_amount || 0))
+        const sign = transactionType === 'income' ? -1 : 1
+        balances.set(key, (balances.get(key) || 0) + sign * Number(participant.share_amount || 0))
       })
     })
     settlements.value.forEach((settlement) => {

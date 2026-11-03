@@ -69,8 +69,13 @@ const activeQuickExpenseTemplates = computed(() => quickExpenseTemplates.value
 const splitTotal = computed(() => splitMembers.value.reduce((total, member) => total + (Number(draft.participant_shares[member.uid]) || 0), 0))
 const splitTarget = computed(() => draft.share_mode === 'percent' ? 100 : Number(draft.amount) || 0)
 const payerChoice = computed({
-  get: () => draft.paid_by_type === 'all' ? 'all' : draft.paid_by_uid,
+  get: () => draft.paid_by_type === 'all' && draft.transaction_type !== 'income' ? 'all' : draft.paid_by_uid,
   set: value => {
+    if (draft.transaction_type === 'income') {
+      draft.paid_by_type = 'person'
+      draft.paid_by_uid = value === 'all' ? (user.value?.uid || memberOptions.value[0]?.uid || '') : value
+      return
+    }
     draft.paid_by_type = value === 'all' ? 'all' : 'person'
     if (value !== 'all') draft.paid_by_uid = value
   },
@@ -133,6 +138,10 @@ function equalShare(member) {
 }
 
 watch(() => draft.transaction_type, type => {
+  if (type === 'income' && draft.paid_by_type === 'all') {
+    draft.paid_by_type = 'person'
+    draft.paid_by_uid = user.value?.uid || memberOptions.value[0]?.uid || ''
+  }
   if (modalOpen.value && type) focusElement('#expense-name')
 })
 watch(() => quickTemplateEditorOpen.value, isOpen => {
@@ -423,9 +432,9 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
             <label class="quick-field">
               <span>{{ draft.transaction_type === 'income' ? 'Recibido por' : 'Pagado por' }}</span>
               <span class="select-shell">
-                <select v-model="payerChoice" aria-label="Persona que paga o recibe" required>
+                <select v-model="payerChoice" :aria-label="draft.transaction_type === 'income' ? 'Persona que recibe el ingreso' : 'Persona que paga'" required>
                   <option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option>
-                  <option value="all">Entre todos</option>
+                  <option v-if="draft.transaction_type !== 'income'" value="all">Entre todos</option>
                 </select><PhCaretUpDown aria-hidden="true" :size="20" />
               </span>
             </label>
@@ -439,7 +448,8 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
             </label>
           </div>
           <fieldset class="split-fieldset">
-            <div class="split-heading"><legend>Dividir</legend><label class="split-mode-select"><span class="sr-only">Modo de reparto</span><select name="draft-share_mode" :value="draft.share_mode" aria-label="Modo de reparto" @change="setShareMode($event.target.value)"><option value="equal">Igualmente</option><option value="amount">Por cantidad</option><option value="percent">Por porcentaje</option></select><PhCaretUpDown aria-hidden="true" :size="18" /></label></div>
+            <div class="split-heading"><legend>{{ draft.transaction_type === 'income' ? 'Aplicar a' : 'Dividir' }}</legend><label class="split-mode-select"><span class="sr-only">Modo de reparto</span><select name="draft-share_mode" :value="draft.share_mode" aria-label="Modo de reparto" @change="setShareMode($event.target.value)"><option value="equal">Igualmente</option><option value="amount">Por cantidad</option><option value="percent">Por porcentaje</option></select><PhCaretUpDown aria-hidden="true" :size="18" /></label></div>
+            <p v-if="draft.transaction_type === 'income'" class="split-help">El ingreso reduce las deudas de las personas seleccionadas hacia quien lo recibe.</p>
             <div class="split-members-card" role="group" :aria-label="`Personas a las que se aplica el movimiento de ${money(draft.amount)}`">
               <label v-for="member in memberOptions" :key="member.uid" class="split-member-row" :class="{ selected: participantSelected(member.uid) }">
                 <input type="checkbox" :checked="participantSelected(member.uid)" :aria-label="`Incluir a ${member.name || member.email}`" @change="toggleParticipant(member.uid)" />
