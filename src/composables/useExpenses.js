@@ -1,3 +1,4 @@
+import { allocateUnits, toCents } from '../domain/money.js'
 import { isPositiveAmount, splitValidation, equalShareCents } from '../domain/validation.js'
 import { postJson } from '../lib/api.js'
 import { historyFieldLabels, paymentMethodLabel } from '../domain/catalogs.js'
@@ -10,7 +11,7 @@ function hasEqualParticipantShares(expense) {
 
   const count = participants.length
   const expected = Array.from({ length: count }, (_, index) => equalShareCents(expense.amount, count, index)).sort((a, b) => a - b)
-  const actual = participants.map(participant => Math.round(Number(participant.share_amount) * 100)).sort((a, b) => a - b)
+  const actual = participants.map(participant => toCents(participant.share_amount)).sort((a, b) => a - b)
   return actual.length === expected.length && actual.every((amount, index) => amount === expected[index])
 }
 
@@ -20,18 +21,9 @@ function participantSharesForDraft(expense, shareMode) {
     return Object.fromEntries(participants.map(participant => [participant.uid, Number(participant.share_amount).toFixed(2)]))
   }
 
-  const total = Number(expense.amount) || 0
-  const totalCents = Math.round(total * 100)
-  const percentages = participants.map((participant, index) => {
-    const exactUnits = totalCents > 0 ? Math.round(Number(participant.share_amount) * 100) / totalCents * 10000 : 0
-    const units = Math.floor(exactUnits)
-    return { uid: participant.uid, index, units, remainder: exactUnits - units }
-  })
-  let remainingUnits = 10000 - percentages.reduce((sum, item) => sum + item.units, 0)
-  percentages.slice().sort((left, right) => right.remainder - left.remainder || left.index - right.index)
-    .slice(0, remainingUnits)
-    .forEach(item => { item.units += 1 })
-  return Object.fromEntries(percentages.map(item => [item.uid, (item.units / 100).toFixed(2)]))
+  const weights = participants.map(participant => Math.max(0, toCents(participant.share_amount) || 0))
+  const percentages = allocateUnits(10000, weights.some(weight => weight > 0) ? weights : participants.map(() => 1))
+  return Object.fromEntries(participants.map((participant, index) => [participant.uid, (percentages[index] / 100).toFixed(2)]))
 }
 
 export function useExpenses({
@@ -377,7 +369,7 @@ export function useExpenses({
     error.value = ''
     if (quickTemplatePrompt.askAmount) {
       if (!isPositiveAmount(quickTemplatePrompt.amount)) {
-        error.value = 'Añade un importe mayor que cero.'
+        error.value = 'Añade un importe entre 0,01 y 99.999.999 €, con un máximo de dos decimales.'
         return
       }
       draft.amount = Number(quickTemplatePrompt.amount).toFixed(2)
@@ -397,8 +389,8 @@ export function useExpenses({
     if (saving.value) return
     error.value = ''
     const amount = Number(quickAmount.value)
-    if (!Number.isFinite(amount) || amount <= 0 || amount > 99999999) {
-      error.value = 'Añade un importe mayor que cero.'
+    if (!isPositiveAmount(quickAmount.value)) {
+      error.value = 'Añade un importe entre 0,01 y 99.999.999 €, con un máximo de dos decimales.'
       return
     }
 
@@ -465,39 +457,29 @@ export function useExpenses({
   function setShareMode(mode) {
     const previousMode = draft.share_mode
     const members = splitMembers.value
-    const amount = Number(draft.amount) || 0
-    const previousValues = Object.fromEntries(members.map((member, index) => [member.uid, Number(shareValue(member, index)) || 0]))
+    const previousValues = members.map((member, index) => toCents(shareValue(member, index)) || 0)
     draft.share_mode = mode
     if (mode === 'equal') return
-    let used = 0
-    members.forEach((member, index) => {
-      const last = index === members.length - 1
-      if (mode === 'percent') {
-        const percent = previousMode === 'percent'
-          ? previousValues[member.uid]
-          : last ? 100 - used : amount > 0 ? previousValues[member.uid] / amount * 100 : 100 / Math.max(1, members.length)
-        draft.participant_shares[member.uid] = Math.max(0, percent).toFixed(2)
-        used += Number(draft.participant_shares[member.uid])
-      } else {
-        const share = previousMode === 'amount'
-          ? previousValues[member.uid]
-          : last ? amount - used : previousMode === 'percent' ? amount * previousValues[member.uid] / 100 : amount / Math.max(1, members.length)
-        draft.participant_shares[member.uid] = Math.max(0, share).toFixed(2)
-        used += Number(draft.participant_shares[member.uid])
-      }
-    })
+    const target = mode === 'percent' ? 10000 : toCents(draft.amount) || 0
+    const weights = previousValues.some(value => value > 0) ? previousValues : members.map(() => 1)
+    const shares = previousMode === mode ? previousValues : allocateUnits(target, weights)
+    draft.participant_shares = Object.fromEntries(members.map((member, index) => [member.uid, (shares[index] / 100).toFixed(2)]))
   }
 
   function shareValue(member, index) {
     if (draft.share_mode === 'equal') {
+      const original = expenses.value.find(expense => expense.id === draft.id && expense.share_mode === 'equal')
+      const participants = original?.participants || []
+      if (original && toCents(original.amount) === toCents(draft.amount) && participants.length === splitMembers.value.length &&
+          participants.every(participant => toCents(participant.share_amount) >= 0 && splitMembers.value.some(member => member.uid === participant.uid)) &&
+          participants.reduce((sum, participant) => sum + toCents(participant.share_amount), 0) === toCents(draft.amount)) {
+        return Number(participants.find(participant => participant.uid === member.uid).share_amount).toFixed(2)
+      }
       return (equalShareCents(draft.amount, splitMembers.value.length, index) / 100).toFixed(2)
     }
     const value = draft.participant_shares[member.uid]
     if (value !== undefined) return value
-    const count = Math.max(1, splitMembers.value.length)
-    if (draft.share_mode === 'percent') return (100 / count).toFixed(2)
-    const total = Number(draft.amount) || 0
-    return (index === count - 1 ? total - (total / count) * index : total / count).toFixed(2)
+    return (equalShareCents(draft.share_mode === 'percent' ? 100 : draft.amount, splitMembers.value.length, index) / 100).toFixed(2)
   }
 
   function addDraftTag(value = tagInput.value) {
@@ -515,7 +497,7 @@ export function useExpenses({
       return
     }
     if (!draft.name.trim() || !isPositiveAmount(draft.amount)) {
-      error.value = 'Añade un nombre y un importe mayor que cero.'
+      error.value = 'Añade un nombre y un importe entre 0,01 y 99.999.999 €, con un máximo de dos decimales.'
       return
     }
     if (!draft.applies_to_all && !draft.participant_uids.length) {
@@ -540,8 +522,18 @@ export function useExpenses({
     }
     saving.value = true
     try {
+      // Stored percentages cannot always be reconstructed from rounded cents.
+      // A nonfinancial edit must retain the original cent allocation.
+      const original = expenses.value.find(expense => expense.id === draft.id)
+      const originalInputs = original ? participantSharesForDraft(original, draft.share_mode) : {}
+      const preserveShares = original && original.share_mode === draft.share_mode &&
+        original.transaction_type === draft.transaction_type && toCents(original.amount) === toCents(draft.amount) &&
+        original.participants?.length === splitMembers.value.length && splitMembers.value.every((member, index) =>
+          original.participants.some(participant => participant.uid === member.uid) &&
+          (draft.share_mode === 'equal' || toCents(shareValue(member, index)) === toCents(originalInputs[member.uid])))
       const data = await postJson('gastoteca/save_expense', await freshToken(true), {
         ...draft,
+        preserve_participant_shares: Boolean(preserveShares),
         city: draft.city || group.value?.default_city || 'Sin ciudad',
         details: draft.details || '',
         occurred_at: draft.occurred_at || emptyDraft().occurred_at,

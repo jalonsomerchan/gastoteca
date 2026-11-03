@@ -1,4 +1,5 @@
 import { reactive, ref } from 'vue'
+import { madridDateTime } from '../domain/dates.js'
 
 // State is created per provider; never shared between application instances.
 export function createGastotecaState() {
@@ -108,8 +109,7 @@ export function createGastotecaState() {
   const detectedCity = ref('')
   const catalogDraft = reactive({ establishments: [], categories: [] })
   const emptyDraft = () => {
-    const now = new Date()
-    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    const local = madridDateTime().replace(' ', 'T').slice(0, 16)
     return { id: '', transaction_type: '', name: '', details: '', category: 'food', place: '', city: '', occurred_at: local, amount: '', payment_method: group.value?.default_payment_method || 'card', paid_by_type: 'person', paid_by_uid: user.value?.uid || '', applies_to_all: true, participant_uids: [], participant_shares: {}, share_mode: 'equal', tags: [], recurrence: 'none', is_quick: false }
   }
   const draft = reactive(emptyDraft())

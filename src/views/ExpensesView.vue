@@ -1,5 +1,7 @@
 <script setup>
 import { computed } from 'vue'
+import { sumMoney } from '../domain/money.js'
+import { recentMonthRange } from '../domain/dates.js'
 import ExpenseCard from '../components/expenses/ExpenseCard.vue'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
 import { PhFunnel, PhCaretDown, PhReceipt, PhPlus } from '@phosphor-icons/vue'
@@ -39,14 +41,13 @@ const newExpensesCount = computed(() => {
 const newExpensesMessage = computed(() => newExpensesCount.value === 1
   ? 'Hay 1 movimiento que no habías visto; ya está marcado como visto.'
   : `Hay ${newExpensesCount.value} movimientos que no habías visto; ya están marcados como vistos.`)
-const totalExpenses = computed(() => expenseItems.value.filter((expense) => !expense.confirmation_pending).reduce((total, expense) => total + Number(expense.amount || 0), 0))
+const totalExpenses = computed(() => sumMoney(expenseItems.value.filter(expense => !expense.confirmation_pending).map(expense => expense.amount)))
 const lastMonthExpenses = computed(() => {
-  const cutoff = new Date()
-  cutoff.setMonth(cutoff.getMonth() - 1)
-  return expenseItems.value.filter((expense) => !expense.confirmation_pending).reduce((total, expense) => {
-    const occurredAt = new Date(String(expense.occurred_at || '').replace(' ', 'T'))
-    return occurredAt >= cutoff ? total + Number(expense.amount || 0) : total
-  }, 0)
+  const range = recentMonthRange()
+  return sumMoney(expenseItems.value.filter(expense => {
+    const occurredAt = String(expense.occurred_at || '').replace('T', ' ')
+    return !expense.confirmation_pending && occurredAt >= range.from && occurredAt <= range.to
+  }).map(expense => expense.amount))
 })
 </script>
 

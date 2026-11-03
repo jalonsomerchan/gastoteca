@@ -13,7 +13,7 @@ La configuración local ya contiene las mismas claves públicas de Firebase que 
 
 ## API
 
-El controlador principal está en `/Applications/MAMP/htdocs/OV2/api/mistergastos.php`. La ruta pública de producción es `/gastoteca/*`; `/mistergastos/*` se mantiene como alias compatible. Todas las rutas requieren `Authorization: Bearer FIREBASE_ID_TOKEN`.
+El controlador principal está en `/Applications/MAMP/htdocs/OV2/api/gastoteca/mistergastos.php`. La ruta pública de producción es `/gastoteca/*`; `/mistergastos/*` se mantiene como alias compatible. Todas las rutas requieren `Authorization: Bearer FIREBASE_ID_TOKEN`.
 
 - `GET /gastoteca/bootstrap`: grupo, gastos y estadísticas.
 - `POST /gastoteca/sync_operation`: aplica un cambio local con un identificador único, el grupo original y el cuerpo de la operación. La respuesta identifica los registros nuevos. Una repetición devuelve el recibo del primer guardado sin repetir movimientos, liquidaciones ni avisos.
@@ -49,7 +49,7 @@ En **Ajustes → API** se pueden crear, consultar y revocar claves asociadas a l
 
 El único endpoint público de esta API es `POST /gastoteca/v1/expenses`, autenticado con `Authorization: Bearer <clave>` y un cuerpo `application/json`. `amount` es obligatorio y acepta punto o coma decimal (`10.02`, `"10,02"` y `"1.234,56"`); `name` es opcional y, si falta o está vacío, se guarda como `Gasto`. También acepta categoría, fecha y hora, establecimiento, ciudad, detalles, método de pago, pagador, participantes, tipo de reparto y etiquetas. `paid_by_uid` acepta el UID de un miembro del grupo y usa por defecto al dueño de la clave; el valor `all` indica que pagó todo el grupo. `applies_to_all` permite controlar si el gasto se reparte entre todo el grupo; al usar `false`, hay que enviar al menos un UID válido en `participant_uids`. Si se omite la ciudad o el método de pago se usan los valores predeterminados del grupo. Se puede indicar `recurrence` como `weekly`, `monthly` o `yearly` para crear una regla recurrente junto con el primer gasto. Todo movimiento creado por este endpoint queda pendiente de revisión, es visible para todos los miembros del grupo y genera un aviso de Telegram para cada miembro con Telegram vinculado, independientemente de sus preferencias de avisos de actividad.
 
-Cada petición válida crea un gasto nuevo, aunque repita los mismos datos. La cabecera `Idempotency-Key` se ignora y puede omitirse; si se reintenta una petición que ya se guardó, se creará otro gasto. La documentación del endpoint, campos, ejemplo cURL y configuración de Atajos está en la propia pestaña API. La migración automática 15 crea `mg_api_keys` y la tabla histórica `mg_api_requests`, que el endpoint ya no utiliza; producción debe desplegar también el cambio de ruta de `api/index.php` y `api/mistergastos.php`.
+Cada petición válida crea un gasto nuevo, aunque repita los mismos datos. La cabecera `Idempotency-Key` se ignora y puede omitirse; si se reintenta una petición que ya se guardó, se creará otro gasto. La documentación del endpoint, campos, ejemplo cURL y configuración de Atajos está en la propia pestaña API. La migración automática 15 crea `mg_api_keys` y la tabla histórica `mg_api_requests`, que el endpoint ya no utiliza; producción debe desplegar también el cambio de ruta de `api/index.php` y `api/gastoteca/mistergastos.php`.
 
 El servidor de la API envía las invitaciones con PHP `mail()`, por lo que el servidor debe tener un MTA/sendmail operativo. `MISTERGASTOS_MAIL_FROM` permite configurar el remitente; si no se define, se usa `admin@alonsoftware.ga`. La API devuelve un error en vez de marcar como enviada una invitación si el transporte de correo falla.
 
@@ -59,7 +59,7 @@ La página `/deudas`, accesible como «Deudas» en el menú, permite registrar c
 
 Las personas se seleccionan entre miembros del grupo y deben ser distintas. Las deudas se guardan en `mg_debts`, separadas de los movimientos y las liquidaciones; marcarlas como pagadas actualiza su estado sin crear un gasto ni una liquidación. Todos los miembros del grupo pueden gestionarlas y la API impide acceder a deudas de otros grupos. Si alguien abandona el grupo, las deudas existentes conservan sus nombres y pueden seguir editándose.
 
-La migración automática 13 añade únicamente la tabla de deudas sobre el esquema 12. Para producción hay que desplegar el frontend y `/Applications/MAMP/htdocs/OV2/api/mistergastos.php`.
+La migración automática 13 añade únicamente la tabla de deudas sobre el esquema 12. Para producción hay que desplegar el frontend y `/Applications/MAMP/htdocs/OV2/api/gastoteca/mistergastos.php`.
 
 ## Copias por Telegram
 
@@ -67,7 +67,7 @@ En Ajustes, «Copias de seguridad» permite enviar una copia ahora o guardar una
 
 Cada archivo contiene todos los ingresos y gastos visibles para esa cuenta, incluidos sus propios movimientos pendientes de confirmación, y las liquidaciones del grupo. Los pendientes de otros autores conservan su privacidad. El CSV utiliza UTF-8 con BOM, separador `;`, importes con dos decimales y columnas de identificación, fecha, detalle, categoría, establecimiento, ciudad, pago, autoría y confirmación. Los repartos y etiquetas están en columnas JSON para conservar sus valores; el texto que podría interpretarse como una fórmula se protege al abrirlo en una hoja de cálculo. El archivo temporal se elimina tanto si el envío funciona como si falla. El transporte utiliza [sendDocument de Telegram](https://core.telegram.org/bots/api#senddocument) y admite archivos de hasta 50 MB.
 
-El backend está en `api/GastotecaBackups.php` y `api/GastotecaSummaries.php`, incorporados por `api/mistergastos.php`; la migración automática de esquema 12 conserva las copias y añade `mg_summary_preferences`. Para producción hay que desplegar estos tres archivos, `api/telegram.php` y, si se usa el ejecutor independiente, `api/cron/gastoteca_backups.php`.
+El backend está en `api/gastoteca/GastotecaBackups.php` y `api/gastoteca/GastotecaSummaries.php`, incorporados por `api/gastoteca/mistergastos.php`; la migración automática de esquema 12 conserva las copias y añade `mg_summary_preferences`. Para producción hay que desplegar estos tres archivos, `api/telegram.php` y, si se usa el ejecutor independiente, `api/cron/gastoteca_backups.php`.
 
 El cron existente `GET /telegram/run_scheduled_alerts` y el script `cron/menudiario_telegram.php` también ejecutan las copias. La vía HTTP de copias exige el encabezado `X-MenuDiario-Cron-Secret` con el secreto del servidor. Si ya está configurado el cron de Menu Diario con ese encabezado, no hace falta otra tarea. Como alternativa se puede ejecutar cada 10 minutos `GET /gastoteca/run_scheduled_backups` con el mismo encabezado o `php /ruta/api/cron/gastoteca_backups.php`. El envío ocurre en la primera ejecución posterior a la hora elegida, aunque la app esté cerrada. Después de un periodo sin cron se envía una única copia actual; los errores mantienen el envío pendiente para reintentarlo. Los bloqueos de MySQL evitan ejecuciones simultáneas de la misma cuenta y grupo.
 
@@ -75,7 +75,7 @@ El cron existente `GET /telegram/run_scheduled_alerts` y el script `cron/menudia
 
 En Ajustes se pueden activar a la vez los resúmenes diarios, semanales y mensuales, con hora y día independientes, o enviar uno manualmente. Usan el mismo cron de las copias, incluso si las copias CSV están desactivadas: no hay que añadir ninguna tarea al servidor. La respuesta del cron incorpora `summaries` con el número de resúmenes revisados, enviados y fallidos. Se usa la conexión personal de Telegram; desactivar los avisos de actividad no desactiva los resúmenes.
 
-Los mensajes resumen el último periodo completo según Europe/Madrid: el día anterior, la semana anterior de lunes a domingo o el mes anterior. Los resúmenes semanales y mensuales muestran «💸 La Gastoteca: Resumen Semanal / Mensual», el saldo neto pendiente actual del destinatario («Debes», «Te deben» o «Balance equilibrado»), gastos e ingresos del periodo, variación del gasto frente al periodo previo y tres rankings: top 3 establecimientos, top 3 categorías y top 3 mayores gastos individuales. Los rankings se ordenan por importe descendente y los establecimientos solo incluyen gastos con un establecimiento asignado. El saldo usa todo el historial de gastos compartidos confirmados y descuenta las liquidaciones, igual que la página Balance. El resumen diario conserva sus totales, media diaria, parte del reparto, ingresos menos gastos y cinco categorías principales más el resto. Solo cuentan movimientos confirmados; los pendientes y las liquidaciones entre miembros no se suman como gastos. Los periodos vacíos y la ausencia de gastos previos para calcular un porcentaje se indican expresamente.
+Los mensajes resumen el último periodo completo según Europe/Madrid: el día anterior, la semana anterior de lunes a domingo o el mes anterior. Muestran el gasto personal del destinatario según su parte del reparto, el número de movimientos, la media diaria, la comparación con el periodo anterior y tres rankings de categorías, establecimientos y mayores gastos. Tanto los totales como los rankings usan `share_amount` de esa cuenta; no incluyen ingresos, movimientos pendientes ni liquidaciones. Los periodos vacíos y la ausencia de gasto previo para calcular un porcentaje se indican expresamente. El balance pendiente del grupo se consulta en la página Balance.
 
 Las programaciones pertenecen a la cuenta y al grupo y se eliminan al abandonar el grupo. Se guardan juntas en una transacción. Los envíos manuales y guardar una programación sin modificarla conservan los envíos pendientes. El cron evita ejecuciones simultáneas y reintenta los fallos; tras una interrupción envía una vez el último periodo completo disponible, sin acumular mensajes de todos los periodos omitidos.
 
@@ -95,7 +95,7 @@ El aviso de conexión muestra el número de cambios pendientes y permite reinten
 
 La API mantiene la validación y los permisos de los endpoints actuales. El cambio y su recibo se confirman en la misma transacción; reintentar después de perder una respuesta no duplica datos. Si el grupo ha cambiado o un movimiento editado ha sido modificado en otro dispositivo, se detiene la cola y se conserva para revisión. Se puede descargar antes de descartarla explícitamente y volver a aplicar los cambios sobre los datos actuales. Los errores de autenticación y de validación no se sustituyen por respuestas de caché. Las copias locales permanecen en ese navegador; borrar sus datos también elimina los cambios que aún no se hayan sincronizado.
 
-Para producción, desplegar primero `api/GastotecaOffline.php` y la versión actualizada de `api/mistergastos.php`, además de sus dependencias existentes, y después el frontend. La migración automática 14 añade únicamente `mg_offline_operations` al esquema 13, sin modificar el historial. El frontend reconoce `offline_sync_version` en el bootstrap; con un backend anterior mantiene las peticiones y guardados online actuales y no reintenta automáticamente una escritura cuyo resultado es incierto. No hace falta un cron nuevo. Las actualizaciones del service worker se activan al cerrar las pestañas de la versión anterior; la caché incluye los módulos de todas las rutas y conserva la build anterior para sus importaciones diferidas.
+Para producción, desplegar primero `api/gastoteca/GastotecaOffline.php` y la versión actualizada de `api/gastoteca/mistergastos.php`, además de sus dependencias existentes, y después el frontend. La migración automática 14 añade únicamente `mg_offline_operations` al esquema 13, sin modificar el historial. El frontend reconoce `offline_sync_version` en el bootstrap; con un backend anterior mantiene las peticiones y guardados online actuales y no reintenta automáticamente una escritura cuyo resultado es incierto. No hace falta un cron nuevo. Las actualizaciones del service worker se activan al cerrar las pestañas de la versión anterior; la caché incluye los módulos de todas las rutas y conserva la build anterior para sus importaciones diferidas.
 
 ## Estructura del frontend
 
@@ -113,6 +113,29 @@ Para producción, desplegar primero `api/GastotecaOffline.php` y la versión act
 
 Para añadir una pantalla, crea una vista en `src/views`, registra su ruta y añade su entrada de navegación si corresponde. Las reglas y operaciones de negocio deben estar en su composable; los componentes reutilizables reciben propiedades y emiten eventos. No crees una segunda instancia de `useGastoteca` desde una vista: usa `useGastotecaContext` para acceder al estado de la sesión.
 
+## Exactitud de importes y reconciliación
+
+Los cálculos de dinero del navegador y del servidor usan céntimos enteros. Gastos, ingresos, liquidaciones, deudas y presupuestos aceptan de 0,01 a 99.999.999 € con un máximo de dos decimales; las fracciones de céntimo se rechazan. Los repartos por cantidad deben sumar exactamente el importe y los porcentajes deben sumar exactamente 100,00 %.
+
+Los repartos iguales y porcentuales distribuyen los céntimos sobrantes por restos mayores, con desempate estable por UID. Todas las partes son no negativas, suman exactamente el total y una parte del 0 % no recibe residuos. Editar datos descriptivos de un movimiento conserva sus importes originales, incluso si no es posible reconstruir el porcentaje original desde los céntimos guardados. Los ingresos compensan las deudas por gastos antes de descontar las liquidaciones: un pago ya registrado conserva su crédito aunque luego se edite o elimine el gasto original.
+
+Las estadísticas, los presupuestos y los desgloses sin conexión cuentan únicamente gastos confirmados. Los filtros estadísticos conservan el último periodo aplicado correctamente y su caché no sustituye los totales de todo el historial. Los periodos y las fechas predeterminadas usan Europe/Madrid. El detalle estadístico muestra cada importe junto a su gasto en móvil y conserva la tabla en escritorio. Las importaciones rechazan divisas distintas de EUR, fechas imposibles e importes que requerirían redondear, indicando la fila que debe revisarse.
+
+Para validar el motor PHP real y comparar sus resultados con JavaScript:
+
+```sh
+PHP_BINARY=/Applications/MAMP/bin/php/_php8.3.9/bin/php npm run test:finance
+# En otro entorno: PHP_BINARY=/ruta/php GASTOTECA_API=/ruta/api/gastoteca/mistergastos.php npm run test:finance
+```
+
+Las pruebas comprueban 10.000 repartos en cada lenguaje y otros 10.004 casos idénticos entre ambos, incluidos importes máximos y multiplicaciones que superarían la precisión de los números decimales. `npm test` cubre además la edición, los saldos, las liquidaciones, los filtros, las importaciones y las proyecciones sin conexión.
+
+`node tests/finance-preview.mjs` abre una revisión visual local en `http://127.0.0.1:5186` con cuentas, API e importes ficticios. Solo ese servidor sustituye Firebase y las peticiones; no usa cuentas reales ni envía Telegram. La revisión se ha comprobado a 1280 y 390 px, incluidos repartos de 0,02 €, desgloses de 0,09 €, filtros vacíos e importes de 99.999.999 €.
+
+El archivo `database/audit-money.sql` contiene consultas de solo lectura para detectar diferencias entre importes y repartos guardados, partes negativas, registros sin participantes y cantidades inválidas. Estas pruebas de código no certifican el historial de producción: hay que ejecutar esa reconciliación sobre la base real y revisar cualquier resultado. No se reescribe automáticamente ningún movimiento histórico.
+
+Desplegar conjuntamente el frontend y `api/gastoteca/mistergastos.php`, `api/gastoteca/GastotecaMoney.php` y `api/gastoteca/GastotecaSummaries.php`. No se necesita una nueva migración de esquema.
+
 ## Verificación
 
 ```sh
@@ -124,12 +147,12 @@ npm run build
 La visibilidad y la autoría de las plantillas se prueban también contra el controlador PHP con almacenamiento simulado, sin conectar con Firebase ni MySQL:
 
 ```sh
-php tests/quick-template-api.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
-php tests/debts-api.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
+php tests/quick-template-api.test.php /Applications/MAMP/htdocs/OV2/api/gastoteca/mistergastos.php
+php tests/debts-api.test.php /Applications/MAMP/htdocs/OV2/api/gastoteca/mistergastos.php
 php tests/backups-api.test.php /Applications/MAMP/htdocs/OV2/api/GastotecaBackups.php
-php tests/backup-controller.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
+php tests/backup-controller.test.php /Applications/MAMP/htdocs/OV2/api/gastoteca/mistergastos.php
 php tests/summaries-api.test.php /Applications/MAMP/htdocs/OV2/api/GastotecaBackups.php
-php tests/offline-api.test.php /Applications/MAMP/htdocs/OV2/api/mistergastos.php
+php tests/offline-api.test.php /Applications/MAMP/htdocs/OV2/api/gastoteca/mistergastos.php
 ```
 
 Las pruebas de resúmenes también ejecutan las consultas de rankings y saldo contra SQLite en memoria; requieren la extensión PHP `pdo_sqlite` y no acceden a datos reales.

@@ -28,6 +28,19 @@ function fixture({ online = true, transport, storage } = {}) {
 async function prepare(fixture) { await fixture.client.request('gastoteca/bootstrap', 'token') }
 const post = (client, action, body) => client.request(`gastoteca/${action}`, 'token', { method: 'POST', body: JSON.stringify(body) })
 
+test('a filtered statistics response cannot replace all-period cached totals', async () => {
+  const f = fixture({ transport: async path => {
+    if (path === 'gastoteca/bootstrap') return { group, expenses: [expense], settlements: [], stats: { total: 30.01 }, offline_sync_version: 1 }
+    if (path.includes('statistics?')) return { stats: { total: 0 } }
+    throw failure(0)
+  } })
+  await prepare(f)
+  await f.client.request('gastoteca/statistics?from=2000-01-01&to=2000-01-31', 'token')
+  f.state.online = false
+  assert.equal((await f.client.request('gastoteca/statistics', 'token')).stats.total, 30.01)
+  assert.equal((await f.client.request('gastoteca/statistics?from=2000-01-01&to=2000-01-31', 'token')).stats.total, 0)
+})
+
 test('cached data survive reopening and every main data route can be read offline', async () => {
   const f = fixture()
   await prepare(f)

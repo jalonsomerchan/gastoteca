@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import { allocateUnits, sumMoney, toCents } from '../domain/money.js'
 
 export function useBalances({ expenses, settlements, user, serverPairBalances }) {
   const pairBalances = computed(() => {
@@ -23,19 +24,17 @@ export function useBalances({ expenses, settlements, user, serverPairBalances })
         : ''
       if (transactionType === 'income' && !incomeEnteredBy) return
       const participants = (expense.participants || []).filter((participant) => transactionType !== 'income' || participant.uid !== incomeEnteredBy)
-      const incomeSharesTotal = transactionType === 'income'
-        ? participants.reduce((total, participant) => total + Number(participant.share_amount || 0), 0)
-        : 0
-      const incomeShareScale = transactionType === 'income' && incomeSharesTotal > 0
-        ? Number(expense.amount || 0) / incomeSharesTotal
-        : 1
-      participants.forEach((participant) => {
+        .sort((a, b) => a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0)
+      const incomeWeights = participants.map(participant => Math.max(0, toCents(participant.share_amount || 0)))
+      const incomeShares = transactionType === 'income'
+        ? allocateUnits(toCents(expense.amount), incomeWeights.some(weight => weight > 0) ? incomeWeights : participants.map(() => 1)) : incomeWeights
+      participants.forEach((participant, index) => {
         const firstUid = transactionType === 'income' ? incomeEnteredBy : participant.uid
         const secondUid = transactionType === 'income' ? participant.uid : expense.paid_by_uid
         if (firstUid === secondUid) return
         const key = keyFor(firstUid, secondUid)
         const sign = transactionType === 'income' ? -1 : 1
-        const shareAmount = Number(participant.share_amount || 0) * (transactionType === 'income' ? incomeShareScale : 1)
+        const shareAmount = transactionType === 'income' ? incomeShares[index] : toCents(participant.share_amount || 0)
         if (transactionType === 'income') {
           incomeCredits.set(key, (incomeCredits.get(key) || 0) + shareAmount)
         } else {
@@ -43,14 +42,15 @@ export function useBalances({ expenses, settlements, user, serverPairBalances })
         }
       })
     })
-    settlements.value.forEach((settlement) => {
-      const key = keyFor(settlement.payer_uid, settlement.payee_uid)
-      balances.set(key, (balances.get(key) || 0) - Number(settlement.amount || 0))
-    })
     incomeCredits.forEach((amount, key) => {
       balances.set(key, Math.max(0, (balances.get(key) || 0) - amount))
     })
-    const entries = [...balances.entries()].filter(([, amount]) => Math.abs(amount) > 0.004)
+    // A recorded transfer must survive later expense edits or income credits.
+    settlements.value.forEach((settlement) => {
+      const key = keyFor(settlement.payer_uid, settlement.payee_uid)
+      balances.set(key, (balances.get(key) || 0) - toCents(settlement.amount || 0))
+    })
+    const entries = [...balances.entries()].filter(([, amount]) => amount !== 0)
     const handled = new Set()
     entries.forEach(([key, amount]) => {
       if (handled.has(key)) return
@@ -63,19 +63,19 @@ export function useBalances({ expenses, settlements, user, serverPairBalances })
       handled.add(key)
       handled.add(reverseKey)
     })
-    return [...balances.entries()].filter(([, amount]) => amount > 0.004).map(([key, amount]) => {
+    return [...balances.entries()].filter(([, amount]) => amount > 0).map(([key, amount]) => {
       const [debtorUid, creditorUid] = key.split('::')
-      return { id: key, debtorUid, creditorUid, amount: Math.round(amount * 100) / 100 }
+      return { id: key, debtorUid, creditorUid, amount: amount / 100 }
     })
   })
 
   const balanceSummary = computed(() => pairBalances.value.reduce((balance, pair) => {
-    if (pair.creditorUid === user.value?.uid) balance.owedToYou += pair.amount
-    if (pair.debtorUid === user.value?.uid) balance.youOwe += pair.amount
+    if (pair.creditorUid === user.value?.uid) balance.owedToYou = sumMoney([balance.owedToYou, pair.amount])
+    if (pair.debtorUid === user.value?.uid) balance.youOwe = sumMoney([balance.youOwe, pair.amount])
     return balance
   }, { owedToYou: 0, youOwe: 0 }))
 
-  const netBalance = computed(() => Math.round((balanceSummary.value.owedToYou - balanceSummary.value.youOwe) * 100) / 100)
+  const netBalance = computed(() => (toCents(balanceSummary.value.owedToYou) - toCents(balanceSummary.value.youOwe)) / 100)
 
   const netBalanceTitle = computed(() => netBalance.value > 0
     ? 'Te deben en total'

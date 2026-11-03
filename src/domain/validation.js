@@ -1,21 +1,20 @@
+import { equalUnits, toCents } from './money.js'
+
 export function equalShareCents(amount, count, index) {
-  const totalCents = Math.round((Number(amount) || 0) * 100)
-  if (count <= 0) return totalCents
-  const regularShare = Math.round(totalCents / count)
-  return index === count - 1 ? totalCents - regularShare * (count - 1) : regularShare
+  return equalUnits(toCents(amount) || 0, count, index)
 }
 
 export function isPositiveAmount(value) {
-  const amount = Number(value)
-  return Number.isFinite(amount) && amount > 0 && amount <= 99999999
+  const cents = toCents(value)
+  return Number.isSafeInteger(cents) && cents >= 1 && cents <= 9999999900
 }
 
 export function splitValidation(values, target, percent = false) {
-  if (values.some(value => !Number.isFinite(Number(value)) || Number(value) < 0)) {
-    return 'Cada parte debe ser un número igual o mayor que cero.'
+  if (values.some(value => !Number.isSafeInteger(toCents(value)) || toCents(value) < 0)) {
+    return 'Cada parte debe ser un número igual o mayor que cero, con un máximo de dos decimales.'
   }
-  const total = values.reduce((sum, value) => sum + Math.round(Number(value) * 100), 0)
-  if (total !== Math.round(Number(target) * 100)) {
+  const total = values.reduce((sum, value) => sum + toCents(value), 0)
+  if (total !== toCents(target)) {
     return percent ? 'Los porcentajes deben sumar exactamente 100 %.' : 'Las cantidades del reparto deben sumar el importe total.'
   }
   return ''

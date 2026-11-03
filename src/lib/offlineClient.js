@@ -49,6 +49,7 @@ export function createOfflineClient({ uid, storage, transport, getToken, isOnlin
     }
     const snapshot = document.snapshot
     for (const key of ['group', 'expenses', 'settlements', 'stats', 'templates', 'notifications', 'unread_count', 'new_expense_ids']) {
+      if (key === 'stats' && path.split('?')[0].endsWith('/statistics') && path.includes('?')) continue
       if (Object.hasOwn(data, key)) snapshot[key] = clone(data[key])
     }
     const action = path.split('/').pop()
@@ -64,17 +65,11 @@ export function createOfflineClient({ uid, storage, transport, getToken, isOnlin
     const [action, query = ''] = path.split('/').pop().split('?')
     if (action === 'group' && snapshot.group) return { group: snapshot.group }
     if (['bootstrap', 'expenses', 'expense_feed'].includes(action) && snapshot.group && snapshot.expenses) return { ...snapshot, user_uid: uid }
-    if (action === 'statistics' && snapshot.stats) {
+    if (action === 'statistics' && (snapshot.expenses || snapshot.stats)) {
       const params = new URLSearchParams(query)
       const from = params.get('from') || ''
       const to = params.get('to') || ''
-      if (from || to) {
-        const expenses = (snapshot.expenses || []).filter(item => {
-          const date = String(item.occurred_at || '').slice(0, 10)
-          return (!from || date >= from) && (!to || date <= to)
-        })
-        return { stats: localStatistics(expenses, { from, to, allExpenses: snapshot.expenses || [] }) }
-      }
+      if (snapshot.expenses) return { stats: localStatistics(snapshot.expenses, { from, to }) }
       return { stats: snapshot.stats }
     }
     if (action === 'quick_expense_templates' && snapshot.group) return { templates: snapshot.templates || [] }

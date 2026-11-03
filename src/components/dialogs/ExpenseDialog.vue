@@ -1,4 +1,6 @@
 <script setup>
+import { sumMoney } from '../../domain/money.js'
+import { splitValidation } from '../../domain/validation.js'
 import { computed, watch } from 'vue'
 import { focusElement } from '../../utils/focus.js'
 import FormError from '../forms/FormError.vue'
@@ -66,8 +68,10 @@ const activeQuickExpenseTemplates = computed(() => quickExpenseTemplates.value
   .filter(item => item.template.active !== false)
   .sort((a, b) => a.order - b.order || a.index - b.index)
   .map(item => item.template))
-const splitTotal = computed(() => splitMembers.value.reduce((total, member) => total + (Number(draft.participant_shares[member.uid]) || 0), 0))
+const splitValues = computed(() => splitMembers.value.map((member, index) => shareValue(member, index)))
+const splitTotal = computed(() => sumMoney(splitValues.value))
 const splitTarget = computed(() => draft.share_mode === 'percent' ? 100 : Number(draft.amount) || 0)
+const splitError = computed(() => splitValidation(splitValues.value, draft.share_mode === 'percent' ? 100 : draft.amount, draft.share_mode === 'percent'))
 const payerChoice = computed({
   get: () => draft.paid_by_type === 'all' && draft.transaction_type !== 'income' ? 'all' : draft.paid_by_uid,
   set: value => {
@@ -474,9 +478,9 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
               <p v-if="!memberOptions.length" class="split-empty">Añade miembros al grupo para poder repartir este movimiento.</p>
             </div>
             <small v-if="draft.share_mode !== 'equal'" class="split-help">{{ draft.share_mode === 'percent' ? 'Los porcentajes deben sumar 100 %.' : 'Las cantidades deben sumar el importe total.' }}</small>
-            <p v-if="draft.share_mode !== 'equal'" id="expense-split-summary" class="split-summary" :class="{ invalid: Math.round(splitTotal * 100) !== Math.round(splitTarget * 100) }" role="status">
-              Asignado: {{ draft.share_mode === 'percent' ? `${splitTotal.toFixed(2)} % de 100 %` : `${money(splitTotal)} de ${money(splitTarget)}` }}.
-              {{ Math.round(splitTotal * 100) === Math.round(splitTarget * 100) ? 'Reparto completo.' : 'Revisa las cantidades antes de guardar.' }}
+            <p v-if="draft.share_mode !== 'equal'" id="expense-split-summary" class="split-summary" :class="{ invalid: Boolean(splitError) }" role="status">
+              Asignado: {{ draft.share_mode === 'percent' ? `${Number.isFinite(splitTotal) ? splitTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'} % de 100 %` : `${money(splitTotal)} de ${money(splitTarget)}` }}.
+              {{ splitError || 'Reparto completo.' }}
             </p>
           </fieldset>
           <div class="form-grid details-grid">

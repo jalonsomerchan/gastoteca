@@ -1,6 +1,10 @@
 export const normalizeName = (value) => value.trim().toLocaleLowerCase('es-ES')
 
-export const money = (value) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
+const currencyFormat = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' })
+export const money = (value) => {
+  const amount = Number(value ?? 0)
+  return Number.isFinite(amount) ? currencyFormat.format(Math.abs(amount) < 0.005 ? 0 : amount) : '—'
+}
 
 export const dateLabel = (value) => new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value.replace(' ', 'T')))
 

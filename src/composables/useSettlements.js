@@ -1,5 +1,6 @@
 import { isPositiveAmount } from '../domain/validation.js'
 import { postJson } from '../lib/api.js'
+import { toCents } from '../domain/money.js'
 
 export function useSettlements({
   settlementTarget,
@@ -29,7 +30,7 @@ export function useSettlements({
       error.value = 'Elige dos personas diferentes: quién paga y quién recibe.'
       return
     }
-    if (!isPositiveAmount(settlementDraft.amount) || Number(settlementDraft.amount) > Number(settlementTarget.value?.amount)) {
+    if (!settlementTarget.value || !isPositiveAmount(settlementDraft.amount) || toCents(settlementDraft.amount) > toCents(settlementTarget.value.amount)) {
       error.value = 'El importe debe ser mayor que cero y no superar la deuda pendiente.'
       return
     }

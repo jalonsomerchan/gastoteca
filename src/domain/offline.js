@@ -1,4 +1,6 @@
 import { equalShareCents } from './validation.js'
+import { allocateUnits, toCents } from './money.js'
+import { madridDateTime } from './dates.js'
 
 export const offlineActions = new Set([
   'save_expense', 'delete_expense', 'confirm_expense', 'save_settlement',
@@ -10,9 +12,9 @@ export const offlineActions = new Set([
 ])
 
 const clone = value => structuredClone(value)
-const cents = value => Math.round(Number(value) * 100)
-const currentMonth = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit' }).format(new Date())
-const dateTime = value => String(value || new Date().toISOString()).replace('T', ' ').slice(0, 19)
+const cents = toCents
+const currentMonth = () => madridDateTime().slice(0, 7)
+const dateTime = value => String(value || madridDateTime()).replace('T', ' ').slice(0, 19)
 const replaceItem = (items, id, value) => [value, ...items.filter(item => item.id !== id)]
 
 export function resolveReferences(value, mappings) {
@@ -22,23 +24,36 @@ export function resolveReferences(value, mappings) {
 }
 
 export function movementFromDraft(body, group, uid, id, previous = {}) {
-  const participantUids = body.applies_to_all ? group.members.map(member => member.uid) : [...new Set(body.participant_uids || [])]
-  const uids = body.transaction_type === 'income' && body.paid_by_type === 'person'
-    ? participantUids.filter(memberUid => memberUid !== body.paid_by_uid)
+  const transactionType = body.transaction_type === 'income' ? 'income' : 'expense'
+  const paidByType = transactionType === 'income' ? 'person' : body.paid_by_type
+  const paidByUid = paidByType === 'all' ? null : body.paid_by_uid || (transactionType === 'income' ? uid : '')
+  const appliesToAll = body.applies_to_all === undefined || Boolean(body.applies_to_all)
+  const participantUids = appliesToAll ? group.members.map(member => member.uid)
+    : [...new Set(body.participant_uids || [])].filter(uid => group.members.some(member => member.uid === uid))
+  participantUids.sort()
+  const uids = transactionType === 'income'
+    ? participantUids.filter(memberUid => memberUid !== paidByUid)
     : participantUids
   const total = cents(body.amount)
-  let used = 0
-  const participants = uids.map((memberUid, index) => {
-    let share = body.share_mode === 'amount' ? cents(body.participant_shares?.[memberUid] || 0)
-      : body.share_mode === 'percent' ? Math.round(total * Number(body.participant_shares?.[memberUid] || 0) / 100)
+  const percentShares = body.share_mode === 'percent'
+    ? allocateUnits(total, uids.map(memberUid => cents(body.participant_shares?.[memberUid] || 0))) : []
+  let participants = uids.map((memberUid, index) => {
+    const share = body.share_mode === 'amount' ? cents(body.participant_shares?.[memberUid] || 0)
+      : body.share_mode === 'percent' ? percentShares[index]
         : equalShareCents(body.amount, uids.length, index)
-    if (body.share_mode === 'percent' && index === uids.length - 1) share = total - used
-    used += share
     return { uid: memberUid, share_amount: share / 100 }
   })
+  const previousShares = previous.participants || []
+  if (body.preserve_participant_shares && previous.share_mode === body.share_mode &&
+      previous.transaction_type === body.transaction_type && cents(previous.amount) === total &&
+      previousShares.length === uids.length && previousShares.every(participant => uids.includes(participant.uid) && cents(participant.share_amount) >= 0) &&
+      previousShares.reduce((sum, participant) => sum + cents(participant.share_amount), 0) === total) {
+    participants = clone(previousShares)
+  }
   return {
     ...previous, ...body, id, amount: total / 100, occurred_at: dateTime(body.occurred_at),
-    paid_by_uid: body.paid_by_type === 'all' ? null : body.paid_by_uid,
+    transaction_type: transactionType, applies_to_all: appliesToAll,
+    paid_by_type: paidByType, paid_by_uid: paidByUid,
     participant_uids: uids, participants, tags: body.tags || [],
     created_by: previous.created_by || uid, confirmation_pending: previous.confirmation_pending || false,
     updated_at: dateTime(), offline_pending: true,
@@ -46,7 +61,7 @@ export function movementFromDraft(body, group, uid, id, previous = {}) {
 }
 
 export function localStatistics(expenses, range = {}) {
-  const allItems = expenses.filter(item => item.transaction_type === 'expense' && !item.confirmation_pending)
+  const allItems = expenses.filter(item => (item.transaction_type || 'expense') === 'expense' && !item.confirmation_pending)
   const items = allItems.filter(item => {
     const date = String(item.occurred_at || '').slice(0, 10)
     return (!range.from || date >= range.from) && (!range.to || date <= range.to)
@@ -70,7 +85,7 @@ export function localStatistics(expenses, range = {}) {
   const monthlyItems = range.from || range.to ? items : items.filter(item => item.occurred_at.slice(0, 10) >= start.toISOString().slice(0, 10))
   return {
     total, count: items.length, average: items.length ? total / items.length : 0,
-    current_month_total: sum((range.allExpenses || allItems).filter(item => item.occurred_at.slice(0, 7) === month)),
+    current_month_total: sum((range.allExpenses || allItems).filter(item => (item.transaction_type || 'expense') === 'expense' && !item.confirmation_pending && item.occurred_at.slice(0, 7) === month)),
     by_category: breakdown('category', item => item.category),
     by_member: breakdown('uid', item => item.paid_by_type === 'all' ? '' : item.paid_by_uid),
     by_participant: breakdown('uid', item => item.uid, items.flatMap(item => (item.participants || []).map(participant => ({ uid: participant.uid, amount: participant.share_amount })))),
@@ -153,7 +168,7 @@ export function projectOffline(document, uid) {
       snapshot.unread_count = (snapshot.notifications || []).filter(item => !item.read_at).length
     }
   }
-  if (document.queue?.some(operation => /expense|settlement/.test(operation.action) && operation.action !== 'save_quick_expense_templates')) {
+  if (document.queue?.some(operation => /expense|settlement|budget/.test(operation.action) && operation.action !== 'save_quick_expense_templates')) {
     snapshot.stats = localStatistics(snapshot.expenses)
     ;(group.budgets || []).forEach(item => { item.current_total = snapshot.expenses.filter(expense => !expense.confirmation_pending && expense.transaction_type === 'expense' && expense.category === item.category && expense.occurred_at.slice(0, 7) === currentMonth()).reduce((total, expense) => total + cents(expense.amount), 0) / 100 })
   }

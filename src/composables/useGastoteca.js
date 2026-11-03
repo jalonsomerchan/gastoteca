@@ -1,3 +1,4 @@
+import { allocateUnits, toCents } from '../domain/money.js'
 import { useGroupCatalogs } from './useGroupCatalogs.js'
 import { createGastotecaState } from '../state/createGastotecaState.js'
 import { useRoute, useRouter } from 'vue-router'
@@ -505,24 +506,16 @@ export function useGastoteca() {
   watch(() => splitMembers.value.map((member) => member.uid).join('|'), () => {
     if (draft.share_mode === 'equal' || !splitMembers.value.length) return
     const members = splitMembers.value
-    const target = draft.share_mode === 'percent' ? 100 : Number(draft.amount) || 0
-    const values = members.map((member, index) => Number(shareValue(member, index)) || 0)
+    const target = draft.share_mode === 'percent' ? 10000 : toCents(draft.amount) || 0
+    let values = members.map((member, index) => toCents(shareValue(member, index)) || 0)
     const total = values.reduce((sum, value) => sum + value, 0)
-    let remainder = target - total
     const lastIndex = values.length - 1
-    if (values[lastIndex] + remainder >= 0) {
-      values[lastIndex] += remainder
-    } else if (total > 0) {
-      let used = 0
-      values.forEach((value, index) => {
-        values[index] = index === lastIndex ? target - used : Math.round(value / total * target * 100) / 100
-        used += values[index]
-      })
+    if (values[lastIndex] + target - total >= 0) {
+      values[lastIndex] += target - total
     } else {
-      values.fill(target / values.length)
-      values[lastIndex] = target - values.slice(0, lastIndex).reduce((sum, value) => sum + value, 0)
+      values = allocateUnits(target, total > 0 ? values : members.map(() => 1))
     }
-    members.forEach((member, index) => { draft.participant_shares[member.uid] = Math.max(0, values[index]).toFixed(2) })
+    members.forEach((member, index) => { draft.participant_shares[member.uid] = (values[index] / 100).toFixed(2) })
   })
 
   watch(() => [filters.search, filters.category, filters.from, filters.to], () => { visibleExpenseCount.value = 20 })

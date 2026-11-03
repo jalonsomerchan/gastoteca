@@ -3,8 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useGastotecaContext } from '../composables/gastotecaContext.js'
 import { postJson } from '../lib/api.js'
 import { readXlsxRows } from '../lib/xlsx.js'
-import { parseBankinterRows } from '../domain/bankinter.js'
-import { normalizeName } from '../utils/formatters.js'
+import { isBankinterMovementImported, parseBankinterRows } from '../domain/bankinter.js'
 import FormError from '../components/forms/FormError.vue'
 import { PhArrowDown, PhArrowUp, PhCheck, PhFileArrowUp, PhUsers } from '@phosphor-icons/vue'
 import Multiselect from '@vueform/multiselect'
@@ -71,19 +70,6 @@ function toggleAll() {
   })
 }
 
-function isAlreadyImported(movement, importKey) {
-  const exactKey = `Importado desde Bankinter · ${importKey}`
-  return expenses.value.some((expense) => {
-    const details = String(expense.details || '')
-    if (details.includes(exactKey)) return true
-    return normalizeName(details).startsWith('importado desde bankinter') &&
-      normalizeName(expense.name || '') === normalizeName(movement.name) &&
-      expense.transaction_type === movement.transaction_type &&
-      Math.round(Number(expense.amount) * 100) === Math.round(Number(movement.amount) * 100) &&
-      String(expense.occurred_at || '').slice(0, 10) === movement.occurred_at.slice(0, 10)
-  })
-}
-
 async function readFile(event) {
   const file = event.target.files?.[0]
   if (!file) return
@@ -94,7 +80,7 @@ async function readFile(event) {
   try {
     if (fileType.value !== 'bankinter') throw new Error('Selecciona un tipo de fichero compatible.')
     movements.value = parseBankinterRows(await readXlsxRows(file)).map((movement) => {
-      const duplicate = isAlreadyImported(movement, movement.import_key)
+      const duplicate = isBankinterMovementImported(expenses.value, movement)
       return { ...movement, duplicate, selected: !duplicate }
     })
     await nextTick()

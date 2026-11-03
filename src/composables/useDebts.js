@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { isPositiveAmount } from '../domain/validation.js'
 import { postJson } from '../lib/api.js'
+import { sumMoney } from '../domain/money.js'
 
 export const debtStatuses = [
   { value: 'pending', label: 'Pendiente' },
@@ -12,8 +13,7 @@ export const debtStatusLabel = status => debtStatuses.find(item => item.value ==
 
 export function useDebts({ error, saving, freshToken, debtDraft, group, memberOptions, currentMember, flash }) {
   const debts = computed(() => group.value?.debts || [])
-  const pendingDebtTotal = computed(() => debts.value.filter(debt => debt.status === 'pending')
-    .reduce((total, debt) => total + Math.round(Number(debt.amount) * 100), 0) / 100)
+  const pendingDebtTotal = computed(() => sumMoney(debts.value.filter(debt => debt.status === 'pending').map(debt => debt.amount)))
 
   function startDebt(debt = null) {
     const targetUid = currentMember.value?.uid || memberOptions.value[0]?.uid || ''
@@ -34,7 +34,7 @@ export function useDebts({ error, saving, freshToken, debtDraft, group, memberOp
       error.value = 'Añade un concepto para la deuda.'
       return false
     }
-    if (!isPositiveAmount(debtDraft.amount) || Math.round(Number(debtDraft.amount) * 100) < 1) {
+    if (!isPositiveAmount(debtDraft.amount)) {
       error.value = 'El importe debe ser al menos 0,01 € y no superar 99.999.999 €.'
       return false
     }

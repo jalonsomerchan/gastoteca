@@ -1,4 +1,5 @@
 <script setup>
+import { sumMoney } from '../../domain/money.js'
 import BaseDialog from '../dialogs/BaseDialog.vue'
 import { money, dateLabel } from '../../utils/formatters.js'
 
@@ -19,7 +20,7 @@ const emit = defineEmits(['close'])
           <p class="eyebrow">GASTOS DEL DESGLOSE</p>
           <h2 id="stats-expenses-title" class="modal-title">{{ title }}</h2>
           <p v-if="!loading && !error" class="stats-expense-summary">
-            {{ items.length }} {{ items.length === 1 ? 'gasto' : 'gastos' }} · {{ money(items.reduce((sum, item) => sum + Number(item.displayAmount), 0)) }}
+            {{ items.length }} {{ items.length === 1 ? 'gasto' : 'gastos' }} · {{ money(sumMoney(items.map(item => item.displayAmount))) }}
           </p>
         </div>
         <button type="button" class="icon-button" aria-label="Cerrar" @click="emit('close')">×</button>
@@ -41,6 +42,17 @@ const emit = defineEmits(['close'])
             </tr>
           </tbody>
         </table>
+        <ul class="stats-expense-mobile" :aria-label="title">
+          <li v-for="item in items" :key="item.expense.id">
+            <div>
+              <strong>{{ item.expense.name || 'Sin título' }}</strong>
+              <small>{{ dateLabel(item.expense.occurred_at) }}</small>
+              <small>{{ item.expense.categoryLabel || item.expense.category || '—' }} · {{ item.expense.place || 'Sin establecimiento' }}</small>
+              <small v-if="item.isShare">Parte asignada</small>
+            </div>
+            <b>{{ money(item.displayAmount) }}</b>
+          </li>
+        </ul>
       </div>
       <footer><button type="button" class="secondary" @click="emit('close')">Cerrar</button></footer>
     </section>

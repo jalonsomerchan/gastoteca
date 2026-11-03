@@ -473,7 +473,7 @@ test('budget editor keeps validation failures open and closes after saving the c
   await editor.submitEditor()
   assert.equal(fetchMock.mock.callCount(), 0)
   assert.equal(editor.editorOpen.value, true)
-  assert.match(editor.error.value, /mayor que cero/)
+  assert.match(editor.error.value, /0,01.*dos decimales/)
   editor.budgetDraft.monthly_limit = '250.00'
   await editor.submitEditor()
   assert.equal(editor.group.value.budgets[0].monthly_limit, '250.00')
@@ -521,7 +521,7 @@ test('quick expense validates the amount before contacting the API', async () =>
     app.quickExpenseMode.value = true
     app.quickAmount.value = '-1'
     app.saveQuickExpense()
-    assert.match(app.error.value, /importe mayor que cero/)
+    assert.match(app.error.value, /importe.*0,01.*dos decimales/)
   })
 })
 
@@ -807,6 +807,54 @@ test('split mode conversions preserve the distribution and total', () => {
   editor.draft.participant_shares = { alice: '25.00', bob: '75.00' }
   editor.setShareMode('amount')
   assert.deepEqual(editor.draft.participant_shares, { alice: '7.50', bob: '22.50' })
+})
+
+test('saving a nonfinancial edit requests preservation of original cents and financial edits disable it', async t => {
+  const bodies = []
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    bodies.push(JSON.parse(options.body))
+    return { ok: true, json: async () => ({ data: { expenses: [], stats: { total: 0 } } }) }
+  })
+  const original = { ...expense, amount: 999999.99, share_mode: 'percent', participants: [{ uid: 'alice', share_amount: 333333.33 }, { uid: 'bob', share_amount: 666666.66 }] }
+  const editor = expenseEditor()
+  editor.expenses.value = [original]
+  editor.openExpense(original)
+  editor.draft.name = 'Solo un cambio de nombre'
+  await editor.saveExpense()
+  assert.equal(bodies[0].preserve_participant_shares, true)
+  editor.expenses.value = [original]
+  editor.openExpense(original)
+  editor.draft.participant_shares = { alice: '50.00', bob: '50.00' }
+  await editor.saveExpense()
+  assert.equal(bodies[1].preserve_participant_shares, false)
+})
+
+test('equal editor shows stored cents and new small splits always sum to their amount', () => {
+  const editor = expenseEditor()
+  editor.group.value.members = [alice, bob, { uid: 'charlie' }, { uid: 'diana' }]
+  editor.openExpense()
+  editor.draft.amount = '0.02'
+  const values = editor.group.value.members.map((member, index) => editor.shareValue(member, index))
+  assert.deepEqual(values, ['0.00', '0.00', '0.01', '0.01'])
+  editor.setShareMode('amount')
+  assert.deepEqual(Object.values(editor.draft.participant_shares), values)
+  const original = { ...expense, amount: 0.03, share_mode: 'equal', participants: [{ uid: 'alice', share_amount: 0.01 }, { uid: 'bob', share_amount: 0.02 }] }
+  editor.group.value.members = [alice, bob]
+  editor.expenses.value = [original]
+  editor.openExpense(original)
+  assert.equal(editor.shareValue(alice, 0), '0.01')
+  assert.equal(editor.shareValue(bob, 1), '0.02')
+})
+
+test('split summary never describes fractional cents as a complete split', async () => {
+  const html = await renderComponent('/src/components/dialogs/ExpenseDialog.vue', 'expenses', app => {
+    app.openExpense(expense)
+    app.setShareMode('amount')
+    app.draft.amount = '0.01'
+    app.draft.participant_shares = { alice: '0.005', bob: '0.005' }
+  })
+  assert.match(html, /máximo de dos decimales/)
+  assert.doesNotMatch(html, /Reparto completo\./)
 })
 
 test('expense filters are labelled and empty results keep their main heading', async () => {

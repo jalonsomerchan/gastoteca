@@ -2,6 +2,9 @@
 
 // php tests/backups-api.test.php /path/to/api/GastotecaBackups.php
 // Real backup logic with fake storage and transport: no account data or network.
+if (!function_exists('api_config')) {
+    function api_config($name, $default = null) { return $default; }
+}
 require $argv[1];
 
 function check($condition, $message) { if (!$condition) throw new RuntimeException($message); }

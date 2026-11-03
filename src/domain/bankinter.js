@@ -1,3 +1,6 @@
+import { toCents } from './money.js'
+import { normalizeName } from '../utils/formatters.js'
+
 const headerAliases = {
   date: ['fecha contable', 'fecha'],
   valueDate: ['fecha valor'],
@@ -36,26 +39,51 @@ function columnIndex(headers, aliases) {
 }
 
 function parseAmount(value) {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'number') return Number.isSafeInteger(toCents(value)) ? toCents(value) / 100 : null
   const raw = String(value ?? '').trim().replace(/\s/g, '')
   if (!raw) return null
-  const normalized = raw.includes(',') && raw.includes('.')
-    ? (raw.lastIndexOf(',') > raw.lastIndexOf('.') ? raw.replace(/\./g, '').replace(',', '.') : raw.replace(/,/g, ''))
-    : raw.replace(',', '.')
-  const amount = Number(normalized)
-  return Number.isFinite(amount) ? amount : null
+  let normalized = raw
+  if (raw.includes(',')) {
+    if (raw.includes('.') && raw.lastIndexOf('.') > raw.lastIndexOf(',')) {
+      if (!/^-?\d{1,3}(?:,\d{3})+\.\d{1,2}$/.test(raw)) return null
+      normalized = raw.replace(/,/g, '')
+    } else {
+      if (!/^-?(?:\d+|\d{1,3}(?:\.\d{3})+),\d{1,2}$/.test(raw)) return null
+      normalized = raw.replace(/\./g, '').replace(',', '.')
+    }
+  }
+  const cents = toCents(normalized)
+  return Number.isSafeInteger(cents) ? cents / 100 : null
 }
 
 function parseDate(value) {
   const raw = String(value ?? '').trim()
-  const match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (match) {
-    const [, day, month, year] = match
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00`
+  if (/^\d{5,7}$/.test(raw)) {
+    const serial = Number(raw)
+    if (serial < 61 || serial > 2958465) return ''
+    return new Date(Date.UTC(1899, 11, 30) + serial * 86400000).toISOString().slice(0, 10) + 'T12:00'
   }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}T12:00`
+  const match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2}(?::\d{2})?)?$/)
+  if (!match && !iso) return ''
+  const [, day, month, year] = match || [null, iso[3], iso[2], iso[1]]
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)))
+  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() + 1 !== Number(month) || date.getUTCDate() !== Number(day)) return ''
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00`
+}
+
+export function isBankinterMovementImported(expenses, movement) {
+  return expenses.some(expense => {
+    const details = String(expense.details || '')
+    const key = details.match(/bankinter:[0-9a-f]{8}\b/i)?.[0]
+    if (key && key !== movement.import_key) return false
+    if (key) return true
+    const matchesAmountAndDate = expense.transaction_type === movement.transaction_type &&
+      toCents(expense.amount) === toCents(movement.amount) &&
+      String(expense.occurred_at || '').slice(0, 10) === movement.occurred_at.slice(0, 10)
+    return normalizeName(details).startsWith('importado desde bankinter') &&
+      normalizeName(expense.name || '') === normalizeName(movement.name) && matchesAmountAndDate
+  })
 }
 
 export function parseBankinterRows(rows) {
@@ -78,8 +106,12 @@ export function parseBankinterRows(rows) {
     const amount = parseAmount(row[amountColumn])
     const description = String(row[descriptionColumn] ?? '').trim()
     const occurredAt = parseDate(row[dateColumn])
-    const valueDate = valueDateColumn >= 0 ? parseDate(row[valueDateColumn]) : occurredAt
-    if (!description || amount === null || amount === 0 || !occurredAt) return
+    const valueDate = valueDateColumn >= 0 && String(row[valueDateColumn] ?? '').trim() ? parseDate(row[valueDateColumn]) : occurredAt
+    if (!description || !String(row[dateColumn] ?? '').trim()) return
+    const currency = String(row[currencyColumn] ?? 'EUR').trim().toUpperCase() || 'EUR'
+    if (currency !== 'EUR') throw new Error(`La fila ${headerRowIndex + index + 2} está en ${currency}. Convierte el importe a euros antes de importarla.`)
+    if (amount === null || Math.abs(amount) > 99999999 || !occurredAt || !valueDate) throw new Error(`Revisa la fecha y el importe de la fila ${headerRowIndex + index + 2}; los importes deben tener como máximo dos decimales.`)
+    if (amount === 0) return
     movements.push({
       id: `bankinter-${headerRowIndex + index + 2}`,
       sourceRow: headerRowIndex + index + 2,
@@ -90,7 +122,7 @@ export function parseBankinterRows(rows) {
       occurred_at: occurredAt,
       value_date: valueDate,
       balance: parseAmount(row[balanceColumn]),
-      currency: String(row[currencyColumn] ?? 'EUR').trim() || 'EUR',
+      currency,
       selected: true,
       category: 'other',
       place: '',

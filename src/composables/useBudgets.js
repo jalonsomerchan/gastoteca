@@ -6,7 +6,7 @@ export function useBudgets({ error, saving, freshToken, budgetDraft, group, flas
     if (saving.value) return false
     error.value = ''
     if (!isPositiveAmount(budgetDraft.monthly_limit)) {
-      error.value = 'Añade un límite mensual mayor que cero.'
+      error.value = 'Añade un límite entre 0,01 y 99.999.999 €, con un máximo de dos decimales.'
       return false
     }
     saving.value = true

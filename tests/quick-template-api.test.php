@@ -16,6 +16,7 @@ class TemplateTestResult
     private $rows;
     public function __construct($rows) { $this->rows = $rows; }
     public function fetch_all($mode) { return $this->rows; }
+    public function free() {}
 }
 
 class TemplateTestStatement

@@ -1,6 +1,7 @@
 import { builtInCategories, customCategoryColor } from '../domain/catalogs.js'
 import { computed } from 'vue'
 import { normalizeName } from '../utils/formatters.js'
+import { sumMoney } from '../domain/money.js'
 
 export function useGroupCatalogs({ group, user, stats, draft, recurringDraft, detectedCity, expenses }) {
   const categories = computed(() => [
@@ -18,8 +19,8 @@ export function useGroupCatalogs({ group, user, stats, draft, recurringDraft, de
   const maxCategoryTotal = computed(() => Math.max(1, ...stats.value.by_category.map((item) => Number(item.total))))
 
   const budgetSummary = computed(() => (group.value?.budgets || []).reduce((summary, budget) => {
-      summary.limit += Number(budget.monthly_limit) || 0
-      summary.spent += Number(budget.current_total) || 0
+      summary.limit = sumMoney([summary.limit, budget.monthly_limit || 0])
+      summary.spent = sumMoney([summary.spent, budget.current_total || 0])
       return summary
     }, { limit: 0, spent: 0 }))
 
@@ -28,13 +29,17 @@ export function useGroupCatalogs({ group, user, stats, draft, recurringDraft, de
   const tagOptions = computed(() => (group.value?.tags || []).map((item) => item.name))
 
   const splitMembers = computed(() => {
-    const participants = draft.applies_to_all ? memberOptions.value : memberOptions.value.filter((member) => draft.participant_uids.includes(member.uid))
+    const participants = [...(draft.applies_to_all ? memberOptions.value : memberOptions.value.filter((member) => draft.participant_uids.includes(member.uid)))].sort((a, b) => a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0)
     return draft.transaction_type === 'income' && draft.paid_by_type === 'person'
       ? participants.filter((member) => member.uid !== draft.paid_by_uid)
       : participants
   })
 
-  const recurringSplitMembers = computed(() => recurringDraft.applies_to_all ? memberOptions.value : memberOptions.value.filter((member) => recurringDraft.participant_uids.includes(member.uid)))
+  const recurringSplitMembers = computed(() => {
+    const participants = [...(recurringDraft.applies_to_all ? memberOptions.value : memberOptions.value.filter((member) => recurringDraft.participant_uids.includes(member.uid)))].sort((a, b) => a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0)
+    return recurringDraft.transaction_type === 'income'
+      ? participants.filter(member => member.uid !== recurringDraft.paid_by_uid) : participants
+  })
 
   const cityOptions = computed(() => [...new Set([
       group.value?.default_city,
