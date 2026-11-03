@@ -17,6 +17,7 @@ export function useGroup({
   expenses,
   stats,
   settlements,
+  pairBalances,
   loadNotifications,
 }) {
   async function invite() {
@@ -122,6 +123,7 @@ export function useGroup({
       expenses.value = data.expenses
       stats.value = data.stats
       settlements.value = data.settlements || []
+      pairBalances.value = Array.isArray(data.pair_balances) ? data.pair_balances : null
       joinCode.value = ''
       await loadNotifications()
       flash('Ya formas parte del grupo.')
@@ -139,6 +141,7 @@ export function useGroup({
       expenses.value = data.expenses
       stats.value = data.stats
       settlements.value = data.settlements || []
+      pairBalances.value = Array.isArray(data.pair_balances) ? data.pair_balances : null
       await loadNotifications()
       flash('Has creado un nuevo grupo personal.')
     } catch (reason) { error.value = reason.message }

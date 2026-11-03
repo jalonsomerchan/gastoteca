@@ -10,6 +10,7 @@ export function useSettlements({
   saving,
   freshToken,
   settlements,
+  pairBalances,
   flash,
 }) {
   function openSettlement(entry, isOwedToYou) {
@@ -36,6 +37,7 @@ export function useSettlements({
     try {
       const data = await postJson('gastoteca/save_settlement', await freshToken(true), { ...settlementDraft })
       settlements.value = data.settlements || []
+      pairBalances.value = Array.isArray(data.pair_balances) ? data.pair_balances : null
       settlementTarget.value = null
       flash('Pago registrado; el balance pendiente se ha actualizado.')
     } catch (reason) {

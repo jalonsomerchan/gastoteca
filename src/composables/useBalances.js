@@ -1,7 +1,15 @@
 import { computed } from 'vue'
 
-export function useBalances({ expenses, settlements, user }) {
+export function useBalances({ expenses, settlements, user, serverPairBalances }) {
   const pairBalances = computed(() => {
+    if (Array.isArray(serverPairBalances?.value)) {
+      return serverPairBalances.value.map((pair) => ({
+        id: pair.id || `${pair.debtor_uid}::${pair.creditor_uid}`,
+        debtorUid: pair.debtor_uid,
+        creditorUid: pair.creditor_uid,
+        amount: Number(pair.amount || 0),
+      }))
+    }
     const balances = new Map()
     const incomeCredits = new Map()
     const keyFor = (debtor, creditor) => `${debtor}::${creditor}`
@@ -39,6 +47,9 @@ export function useBalances({ expenses, settlements, user }) {
       const key = keyFor(settlement.payer_uid, settlement.payee_uid)
       balances.set(key, (balances.get(key) || 0) - Number(settlement.amount || 0))
     })
+    incomeCredits.forEach((amount, key) => {
+      balances.set(key, Math.max(0, (balances.get(key) || 0) - amount))
+    })
     const entries = [...balances.entries()].filter(([, amount]) => Math.abs(amount) > 0.004)
     const handled = new Set()
     entries.forEach(([key, amount]) => {
@@ -51,9 +62,6 @@ export function useBalances({ expenses, settlements, user }) {
       balances.set(reverseKey, Math.max(0, -net))
       handled.add(key)
       handled.add(reverseKey)
-    })
-    incomeCredits.forEach((amount, key) => {
-      balances.set(key, Math.max(0, (balances.get(key) || 0) - amount))
     })
     return [...balances.entries()].filter(([, amount]) => amount > 0.004).map(([key, amount]) => {
       const [debtorUid, creditorUid] = key.split('::')

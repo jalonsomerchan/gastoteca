@@ -15,6 +15,7 @@ export function createGastotecaState() {
   const expenses = ref([])
   const newExpenseIds = ref([])
   const settlements = ref([])
+  const pairBalances = ref(null)
   const notifications = ref([])
   const unreadNotificationCount = ref(0)
   const notificationsOpen = ref(false)
@@ -128,6 +129,7 @@ export function createGastotecaState() {
     expenses,
     newExpenseIds,
     settlements,
+    pairBalances,
     notifications,
     unreadNotificationCount,
     notificationsOpen,

@@ -63,6 +63,7 @@ export function useExpenses({
   expenses,
   stats,
   settlements,
+  pairBalances,
   flash,
   splitMembers,
   deleteTarget,
@@ -420,6 +421,7 @@ export function useExpenses({
       expenses.value = data.expenses
       stats.value = data.stats
       settlements.value = data.settlements || settlements.value
+      pairBalances.value = Array.isArray(data.pair_balances) ? data.pair_balances : null
       if (data.group) group.value = data.group
       closeExpenseModal()
       flash('Gasto rápido guardado. Puedes completarlo desde la lista.')
@@ -549,11 +551,14 @@ export function useExpenses({
       expenses.value = data.expenses
       stats.value = data.stats
       settlements.value = data.settlements || settlements.value
+      pairBalances.value = Array.isArray(data.pair_balances) ? data.pair_balances : null
       if (data.group) group.value = data.group
       if (confirmAfterSave) {
         const confirmed = await postJson('gastoteca/confirm_expense', await freshToken(true), { id: draft.id })
         expenses.value = confirmed.expenses || expenses.value
         stats.value = confirmed.stats || stats.value
+        settlements.value = confirmed.settlements || settlements.value
+        pairBalances.value = Array.isArray(confirmed.pair_balances) ? confirmed.pair_balances : pairBalances.value
         if (confirmed.group) group.value = confirmed.group
         closeExpenseModal()
         await loadNotifications()
@@ -581,6 +586,7 @@ export function useExpenses({
       expenses.value = data.expenses
       stats.value = data.stats
       settlements.value = data.settlements || settlements.value
+      pairBalances.value = Array.isArray(data.pair_balances) ? data.pair_balances : null
       deleteTarget.value = null
       closeExpenseModal()
       flash(`${movement} eliminado.`)

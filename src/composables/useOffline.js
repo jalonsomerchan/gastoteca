@@ -3,7 +3,7 @@ import { API_BASE, networkRequest, setOfflineClient, getJson } from '../lib/api.
 import { createOfflineStorage } from '../lib/offlineStorage.js'
 import { createOfflineClient } from '../lib/offlineClient.js'
 
-export function useOffline({ user, group, expenses, settlements, stats, quickExpenseTemplates, notifications, unreadNotificationCount, freshToken, error }) {
+export function useOffline({ user, group, expenses, settlements, pairBalances, stats, quickExpenseTemplates, notifications, unreadNotificationCount, freshToken, error }) {
   const offline = reactive({ offline: false, serverUnavailable: false, ready: false, pending: 0, syncing: false, savedAt: null, syncError: '', storageError: '', shellReady: false })
   let client = null
   let channel = null
@@ -14,6 +14,7 @@ export function useOffline({ user, group, expenses, settlements, stats, quickExp
     if (snapshot.group) group.value = snapshot.group
     if (snapshot.expenses) expenses.value = snapshot.expenses
     if (snapshot.settlements) settlements.value = snapshot.settlements
+    pairBalances.value = null
     if (snapshot.stats) stats.value = snapshot.stats
     if (snapshot.templates) quickExpenseTemplates.value = snapshot.templates
     if (snapshot.notifications) notifications.value = snapshot.notifications

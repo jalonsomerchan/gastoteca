@@ -42,6 +42,7 @@ export function useGastoteca() {
     expenses,
     newExpenseIds,
     settlements,
+    pairBalances,
     notifications,
     unreadNotificationCount,
     notificationsOpen,
@@ -115,7 +116,7 @@ export function useGastoteca() {
   let disposed = false
   let noticeTimer = null
   const { offline, startOffline, stopOffline, prepareOfflineData, syncOffline, exportOfflineChanges, discardOfflineChanges } = useOffline({
-    user, group, expenses, settlements, stats, quickExpenseTemplates, notifications, unreadNotificationCount, freshToken, error,
+    user, group, expenses, settlements, pairBalances, stats, quickExpenseTemplates, notifications, unreadNotificationCount, freshToken, error,
   })
 
   const filteredExpenses = computed(() => expenses.value.filter((expense) => {
@@ -182,6 +183,7 @@ export function useGastoteca() {
     expenses,
     settlements,
     user,
+    serverPairBalances: pairBalances,
   })
   const { frequentNames, frequentEstablishments, frequentCities } = useExpenseSuggestions({ expenses, draft })
   const { detectCurrentCity } = useLocation({ detectedCity, draft, locationStatus, detectingCity, group })
@@ -256,6 +258,7 @@ export function useGastoteca() {
     expenses,
     stats,
     settlements,
+    pairBalances,
     flash,
     splitMembers,
     deleteTarget,
@@ -283,6 +286,7 @@ export function useGastoteca() {
     saving,
     freshToken,
     settlements,
+    pairBalances,
     flash,
   })
   const { saveBudget, deleteBudget } = useBudgets({ error, saving, freshToken, budgetDraft, group, flash })
@@ -360,6 +364,7 @@ export function useGastoteca() {
     expenses,
     stats,
     settlements,
+    pairBalances,
     loadNotifications,
   })
 
@@ -428,6 +433,7 @@ export function useGastoteca() {
       if (routeName === 'expenses' || routeName === 'balance' || routeName === 'bulk-edit') {
         expenses.value = pageData.expenses || []
         settlements.value = pageData.settlements || []
+        pairBalances.value = Array.isArray(pageData.pair_balances) ? pageData.pair_balances : null
         newExpenseIds.value = routeName === 'expenses' ? pageData.new_expense_ids || [] : []
         if (routeName === 'expenses') openConfirmationFromRoute()
       }
@@ -645,6 +651,7 @@ export function useGastoteca() {
           newExpenseIds.value = []
           quickExpenseTemplates.value = []
           settlements.value = []
+          pairBalances.value = null
           group.value = null
           notifications.value = []
           unreadNotificationCount.value = 0
@@ -685,6 +692,7 @@ export function useGastoteca() {
     expenses,
     newExpenseIds,
     settlements,
+    pairBalances,
     notifications,
     unreadNotificationCount,
     notificationsOpen,

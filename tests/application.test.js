@@ -66,15 +66,19 @@ async function renderComponent(file, routeName, setup = () => {}) {
   return html
 }
 
-test('balances offset reciprocal debts, ignore income and reflect settlements', () => {
-  const expenses = ref([{ ...expense }, { ...expense, id: 2, paid_by_uid: 'bob', participants: [{ uid: 'alice', share_amount: 5 }] }, { ...expense, transaction_type: 'income', amount: 1000 }])
+test('balances apply income credits before offsetting reciprocal debts and reflect settlements', () => {
+  const expenses = ref([
+    { ...expense },
+    { ...expense, id: 2, paid_by_uid: 'bob' },
+    { ...expense, id: 3, transaction_type: 'income', paid_by_uid: 'alice', created_by: 'alice', amount: 5, participants: [{ uid: 'bob', share_amount: 5 }] },
+  ])
   const settlements = ref([])
   const balances = useBalances({ expenses, settlements, user: ref(alice) })
-  assert.equal(balances.netBalance.value, 10)
+  assert.equal(balances.netBalance.value, 5)
   settlements.value.push({ payer_uid: 'bob', payee_uid: 'alice', amount: 4 })
-  assert.equal(balances.netBalance.value, 6)
+  assert.equal(balances.netBalance.value, 1)
   assert.equal(balances.balanceBreakdown.value.owedToYou[0].counterpartyUid, 'bob')
-  settlements.value.push({ payer_uid: 'bob', payee_uid: 'alice', amount: 6 })
+  settlements.value.push({ payer_uid: 'bob', payee_uid: 'alice', amount: 1 })
   assert.equal(balances.netBalance.value, 0)
   assert.deepEqual(balances.pairBalances.value, [])
 })
