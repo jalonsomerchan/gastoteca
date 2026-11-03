@@ -860,6 +860,40 @@ test('income modal includes and enables the recipient when applied to the entire
   assert.doesNotMatch(html, /<input[^>]*disabled[^>]*aria-label="Incluir a Alicia"/)
 })
 
+for (const editing of [false, true]) {
+  test(`${editing ? 'edited' : 'new'} income omits location fields and retains existing location data`, async () => {
+    const html = await renderComponent('/src/components/dialogs/ExpenseDialog.vue', 'expenses', app => {
+      app.openExpense(editing ? { ...expense, transaction_type: 'income' } : null)
+      app.draft.transaction_type = 'income'
+      if (editing) {
+        assert.equal(app.draft.place, expense.place)
+        assert.equal(app.draft.city, expense.city)
+      }
+    })
+    assert.doesNotMatch(html, /id="expense-(?:place|city)-select"|Usar mi ubicación/)
+    assert.match(html, /id="expense-category-select"/)
+  })
+}
+
+test('edited movement exposes history as an icon next to its title and keeps its submit button linked to the form', async () => {
+  for (const transaction_type of ['expense', 'income']) {
+    const html = await renderComponent('/src/components/dialogs/ExpenseDialog.vue', 'expenses', app => app.openExpense({ ...expense, transaction_type }))
+    assert.match(html, /<header>[\s\S]*id="expense-title"[\s\S]*id="expense-history-toggle"[\s\S]*<\/header>/)
+    assert.match(html, /aria-label="Ver historial"/)
+    assert.doesNotMatch(html, /expense-history-toolbar|Consulta quién modificó/)
+    assert.match(html, /<\/form>[\s\S]*<footer[^>]*>[\s\S]*type="submit" form="expense-form"/)
+  }
+})
+
+test('quick expense keeps native form submission from the fixed footer', async () => {
+  const html = await renderComponent('/src/components/dialogs/ExpenseDialog.vue', 'expenses', app => {
+    app.openExpense()
+    app.startQuickExpense()
+  })
+  assert.match(html, /<form id="quick-expense-form"/)
+  assert.match(html, /<\/form>[\s\S]*<footer[^>]*>[\s\S]*type="submit" form="quick-expense-form"/)
+})
+
 test('income and recurring income can apply only to the recipient, including in a one-member group', async t => {
   let payload
   t.mock.method(globalThis, 'fetch', async (_url, options) => {

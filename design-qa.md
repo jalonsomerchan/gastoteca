@@ -1,5 +1,16 @@
 # Design QA — expense payer and split controls
 
+## Movement modal update · 2026-11-03
+
+Verified with `node tests/finance-preview.mjs` and synthetic accounts in the in-app browser:
+
+- At 390 × 844, the movement modal occupies exactly the viewport. Header and footer remain fixed; scrolling changes only `.movement-modal-body` (`scrollTop: 656`), with both dialog and modal at `scrollTop: 0`.
+- At 390 × 460, the modal follows the reduced visible height and the footer ends at 460 px without horizontal overflow. VisualViewport resize/scroll listeners also fit the dialog around the on-screen keyboard; physical-device keyboard behavior still requires device testing.
+- At 1280 × 720, the desktop modal remains centered at 760 px wide with a separate scrollable body.
+- New and edited incomes omit city, establishment and geolocation controls. Expense forms retain those fields.
+- The header history icon opens history directly; returning preserves the unsaved name. Creation and editing save successfully through the external fixed footer with native form submission.
+- Validation: 125 tests, lint and production build pass. All browser writes use the local mock API.
+
 Source visual truth: `/var/folders/ty/8gh55kg96pjfryzzvz56btfr0000gp/T/codex-clipboard-9e938bf1-c735-4919-a8fa-b34238b98efe.png`.
 
 Implementation evidence: browser-rendered local preview captured in the Codex in-app browser (desktop 875 × 770 px and mobile 390 × 844 px; capture is ephemeral because the browser tool does not expose a filesystem screenshot path). The preview used the production `src/styles.css` and the same modal control markup/styles; the temporary preview file was removed after verification.
