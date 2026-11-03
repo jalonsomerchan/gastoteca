@@ -5,14 +5,29 @@ export function useBalances({ expenses, settlements, user }) {
     const balances = new Map()
     const keyFor = (debtor, creditor) => `${debtor}::${creditor}`
     expenses.value.forEach((expense) => {
-      if (expense.confirmation_pending || expense.paid_by_type !== 'person' || !expense.paid_by_uid) return
+      if (expense.confirmation_pending) return
       const transactionType = expense.transaction_type || 'expense'
       if (transactionType !== 'expense' && transactionType !== 'income') return
-      ;(expense.participants || []).forEach((participant) => {
-        if (participant.uid === expense.paid_by_uid) return
-        const key = keyFor(participant.uid, expense.paid_by_uid)
+      if (transactionType === 'expense' && (expense.paid_by_type !== 'person' || !expense.paid_by_uid)) return
+      const incomeEnteredBy = transactionType === 'income'
+        ? (expense.paid_by_type === 'person' && expense.paid_by_uid ? expense.paid_by_uid : expense.created_by)
+        : ''
+      if (transactionType === 'income' && !incomeEnteredBy) return
+      const participants = (expense.participants || []).filter((participant) => transactionType !== 'income' || participant.uid !== incomeEnteredBy)
+      const incomeSharesTotal = transactionType === 'income'
+        ? participants.reduce((total, participant) => total + Number(participant.share_amount || 0), 0)
+        : 0
+      const incomeShareScale = transactionType === 'income' && incomeSharesTotal > 0
+        ? Number(expense.amount || 0) / incomeSharesTotal
+        : 1
+      participants.forEach((participant) => {
+        const firstUid = transactionType === 'income' ? incomeEnteredBy : participant.uid
+        const secondUid = transactionType === 'income' ? participant.uid : expense.paid_by_uid
+        if (firstUid === secondUid) return
+        const key = keyFor(firstUid, secondUid)
         const sign = transactionType === 'income' ? -1 : 1
-        balances.set(key, (balances.get(key) || 0) + sign * Number(participant.share_amount || 0))
+        const shareAmount = Number(participant.share_amount || 0) * (transactionType === 'income' ? incomeShareScale : 1)
+        balances.set(key, (balances.get(key) || 0) + sign * shareAmount)
       })
     })
     settlements.value.forEach((settlement) => {

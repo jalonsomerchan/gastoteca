@@ -22,7 +22,10 @@ export function resolveReferences(value, mappings) {
 }
 
 export function movementFromDraft(body, group, uid, id, previous = {}) {
-  const uids = body.applies_to_all ? group.members.map(member => member.uid) : [...new Set(body.participant_uids || [])]
+  const participantUids = body.applies_to_all ? group.members.map(member => member.uid) : [...new Set(body.participant_uids || [])]
+  const uids = body.transaction_type === 'income' && body.paid_by_type === 'person'
+    ? participantUids.filter(memberUid => memberUid !== body.paid_by_uid)
+    : participantUids
   const total = cents(body.amount)
   let used = 0
   const participants = uids.map((memberUid, index) => {

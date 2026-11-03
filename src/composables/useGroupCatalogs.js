@@ -27,7 +27,12 @@ export function useGroupCatalogs({ group, user, stats, draft, recurringDraft, de
 
   const tagOptions = computed(() => (group.value?.tags || []).map((item) => item.name))
 
-  const splitMembers = computed(() => draft.applies_to_all ? memberOptions.value : memberOptions.value.filter((member) => draft.participant_uids.includes(member.uid)))
+  const splitMembers = computed(() => {
+    const participants = draft.applies_to_all ? memberOptions.value : memberOptions.value.filter((member) => draft.participant_uids.includes(member.uid))
+    return draft.transaction_type === 'income' && draft.paid_by_type === 'person'
+      ? participants.filter((member) => member.uid !== draft.paid_by_uid)
+      : participants
+  })
 
   const recurringSplitMembers = computed(() => recurringDraft.applies_to_all ? memberOptions.value : memberOptions.value.filter((member) => recurringDraft.participant_uids.includes(member.uid)))
 

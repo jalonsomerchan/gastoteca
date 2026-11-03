@@ -520,6 +520,10 @@ export function useExpenses({
       error.value = 'Selecciona al menos una persona a la que se aplica el movimiento.'
       return
     }
+    if (draft.transaction_type === 'income' && !splitMembers.value.length) {
+      error.value = 'Selecciona al menos a otra persona a quien aplicar el ingreso.'
+      return
+    }
     if (draft.share_mode !== 'equal' && !splitMembers.value.length) {
       error.value = 'Selecciona participantes antes de personalizar el reparto.'
       return

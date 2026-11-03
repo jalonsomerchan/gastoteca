@@ -96,15 +96,20 @@ const quickTemplatePromptPayerChoice = computed({
 })
 
 function participantSelected(uid) {
+  if (draft.transaction_type === 'income' && uid === draft.paid_by_uid) return false
   return draft.applies_to_all || draft.participant_uids.includes(uid)
 }
 
 function toggleParticipant(uid) {
-  const selected = new Set(draft.applies_to_all ? memberOptions.value.map(member => member.uid) : draft.participant_uids)
+  const selectableMembers = draft.transaction_type === 'income'
+    ? memberOptions.value.filter(member => member.uid !== draft.paid_by_uid)
+    : memberOptions.value
+  const selectableUids = selectableMembers.map(member => member.uid)
+  const selected = new Set(draft.applies_to_all ? selectableUids : draft.participant_uids.filter(memberUid => selectableUids.includes(memberUid)))
   if (selected.has(uid)) selected.delete(uid)
   else selected.add(uid)
-  const selectedUids = memberOptions.value.map(member => member.uid).filter(memberUid => selected.has(memberUid))
-  draft.applies_to_all = selectedUids.length === memberOptions.value.length
+  const selectedUids = selectableUids.filter(memberUid => selected.has(memberUid))
+  draft.applies_to_all = selectedUids.length === selectableUids.length
   draft.participant_uids = draft.applies_to_all ? [] : selectedUids
 }
 
@@ -430,9 +435,9 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
           </div>
           <div class="expense-quick-fields" aria-label="Datos principales del movimiento">
             <label class="quick-field">
-              <span>{{ draft.transaction_type === 'income' ? 'Recibido por' : 'Pagado por' }}</span>
+              <span>{{ draft.transaction_type === 'income' ? 'Ingresado por' : 'Pagado por' }}</span>
               <span class="select-shell">
-                <select v-model="payerChoice" :aria-label="draft.transaction_type === 'income' ? 'Persona que recibe el ingreso' : 'Persona que paga'" required>
+                <select v-model="payerChoice" :aria-label="draft.transaction_type === 'income' ? 'Persona que ingresa el dinero' : 'Persona que paga'" required>
                   <option v-for="member in memberOptions" :key="member.uid" :value="member.uid">{{ member.name || member.email }}</option>
                   <option v-if="draft.transaction_type !== 'income'" value="all">Entre todos</option>
                 </select><PhCaretUpDown aria-hidden="true" :size="20" />
@@ -449,10 +454,10 @@ watch(() => quickTemplatePromptOpen.value, isOpen => {
           </div>
           <fieldset class="split-fieldset">
             <div class="split-heading"><legend>{{ draft.transaction_type === 'income' ? 'Aplicar a' : 'Dividir' }}</legend><label class="split-mode-select"><span class="sr-only">Modo de reparto</span><select name="draft-share_mode" :value="draft.share_mode" aria-label="Modo de reparto" @change="setShareMode($event.target.value)"><option value="equal">Igualmente</option><option value="amount">Por cantidad</option><option value="percent">Por porcentaje</option></select><PhCaretUpDown aria-hidden="true" :size="18" /></label></div>
-            <p v-if="draft.transaction_type === 'income'" class="split-help">El ingreso reduce las deudas de las personas seleccionadas hacia quien lo recibe.</p>
+            <p v-if="draft.transaction_type === 'income'" class="split-help">El ingreso reduce las deudas de quien lo ingresa a las personas seleccionadas.</p>
             <div class="split-members-card" role="group" :aria-label="`Personas a las que se aplica el movimiento de ${money(draft.amount)}`">
               <label v-for="member in memberOptions" :key="member.uid" class="split-member-row" :class="{ selected: participantSelected(member.uid) }">
-                <input type="checkbox" :checked="participantSelected(member.uid)" :aria-label="`Incluir a ${member.name || member.email}`" @change="toggleParticipant(member.uid)" />
+                <input type="checkbox" :checked="participantSelected(member.uid)" :disabled="draft.transaction_type === 'income' && member.uid === draft.paid_by_uid" :aria-label="draft.transaction_type === 'income' && member.uid === draft.paid_by_uid ? 'Quien ingresa el dinero no recibe una parte' : `Incluir a ${member.name || member.email}`" @change="toggleParticipant(member.uid)" />
                 <span class="split-check" aria-hidden="true"><PhCheck :size="16" weight="bold" /></span>
                 <span class="split-member-name">{{ member.name || member.email }}<small v-if="member.uid === user?.uid">Tú</small></span>
                 <span v-if="participantSelected(member.uid) && draft.share_mode === 'equal'" class="split-member-amount">{{ equalShare(member) }}</span>
