@@ -1,0 +1,32 @@
+/* Keep monetary figures consistent across summaries, lists, tables, and forms. */
+:is(
+  .balance-card strong,
+  .expense-amount,
+  .balance-breakdown-card .card-title h2,
+  .balance-entry > b,
+  .settlement-history-list b,
+  .debt-summary > div:first-child strong,
+  .debt-amount,
+  .stats-overview-card strong,
+  .stats-breakdown-button b,
+  .stats-member-button b,
+  .stats-month-button strong,
+  .stats-expense-table td:last-child,
+  .stats-expense-mobile b,
+  .bulk-amount,
+  .import-amount,
+  .import-summary strong,
+  .budget-overview-card strong,
+  .saved-quick-expense-amount,
+  .split-member-amount
+) {
+  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.money-input input,
+.share-editor input,
+.template-share-values input {
+  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
 :root { font-family: 'DM Sans', sans-serif; color: #202b27; background: #f7f7f3; font-synthesis: none; --ink:#202b27; --muted:#77807b; --green:#2f6b55; --green-dark:#245240; --green-focus:#7ba590; --green-shadow:#2f6b5526; --soft:#e5f0eb; --line:#dbe5df; --paper:#fff; --terracotta:#d36b47; --cream:#f3ead9; }
 * { box-sizing: border-box; }
