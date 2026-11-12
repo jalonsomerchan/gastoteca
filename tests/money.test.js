@@ -150,6 +150,21 @@ test('income surplus remains in the balance and expense confirmation changes it'
   assert.equal(balance.netBalance.value, 475.40)
 })
 
+test('legacy equal group income includes its omitted recipient without changing explicit splits', () => {
+  const income = { transaction_type: 'income', paid_by_type: 'person', paid_by_uid: 'a', applies_to_all: true, share_mode: 'equal', amount: 600, participants: [{ uid: 'b', share_amount: 600 }] }
+  const expenses = ref([
+    { transaction_type: 'expense', paid_by_type: 'person', paid_by_uid: 'b', participants: [{ uid: 'a', share_amount: 268.43 }] },
+    { transaction_type: 'expense', paid_by_type: 'person', paid_by_uid: 'a', participants: [{ uid: 'b', share_amount: 143.83 }] },
+    income,
+  ])
+  const balance = useBalances({ expenses, settlements: ref([]), user: ref({ uid: 'a' }) })
+  assert.equal(balance.netBalance.value, 175.40)
+  expenses.value[2] = { ...income, applies_to_all: false }
+  assert.equal(balance.netBalance.value, 475.40)
+  expenses.value[2] = { ...income, share_mode: 'amount' }
+  assert.equal(balance.netBalance.value, 475.40)
+})
+
 test('calendar calculations use Madrid and clamp the previous month across month-end and leap years', () => {
   assert.equal(madridDateTime(new Date('2026-10-31T23:30:00Z')), '2026-11-01 00:30:00')
   assert.equal(recentMonthRange(new Date('2026-03-31T10:00:00Z')).from, '2026-02-28 12:00:00')

@@ -24,8 +24,14 @@ export function useBalances({ expenses, settlements, user, serverPairBalances })
         : ''
       if (transactionType === 'income' && !incomeEnteredBy) return
       const participants = [...(expense.participants || [])]
+      // Older group incomes omitted the recipient from an equal split.
+      // Restore that historical share without adding members who joined later.
+      const legacyGroupIncome = transactionType === 'income' && expense.applies_to_all && expense.share_mode === 'equal' &&
+        participants.length > 0 && !participants.some(participant => participant.uid === incomeEnteredBy)
+      if (legacyGroupIncome) participants.push({ uid: incomeEnteredBy, share_amount: 0 })
+      participants
         .sort((a, b) => a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0)
-      const incomeWeights = participants.map(participant => Math.max(0, toCents(participant.share_amount || 0)))
+      const incomeWeights = participants.map(participant => legacyGroupIncome ? 1 : Math.max(0, toCents(participant.share_amount || 0)))
       const incomeShares = transactionType === 'income'
         ? allocateUnits(toCents(expense.amount), incomeWeights.some(weight => weight > 0) ? incomeWeights : participants.map(() => 1)) : incomeWeights
       participants.forEach((participant, index) => {

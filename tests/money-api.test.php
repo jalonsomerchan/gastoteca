@@ -143,5 +143,12 @@ check(count($pairs) === 1 && $pairs[0]['debtor_uid'] === 'bob' && $pairs[0]['amo
 $storage->participants[0]['share_amount'] = 268.43;
 $pairs = $pairsMethod->invoke($api, 1);
 check(count($pairs) === 1 && $pairs[0]['amount'] === 475.40, 'Removing a confirmed expense share must change the balance by its full amount');
+$storage->expenses[2]['applies_to_all'] = true;
+$storage->expenses[2]['share_mode'] = 'equal';
+$pairs = $pairsMethod->invoke($api, 1);
+check(count($pairs) === 1 && $pairs[0]['debtor_uid'] === 'bob' && $pairs[0]['amount'] === 175.40, 'Legacy equal group income must include the omitted recipient');
+$storage->expenses[2]['applies_to_all'] = false;
+$pairs = $pairsMethod->invoke($api, 1);
+check(count($pairs) === 1 && $pairs[0]['amount'] === 475.40, 'Income assigned only to another participant must keep its full amount');
 
 echo "Money parsing, 10,000 allocations, shares, write validation and exact balances passed.\n";
