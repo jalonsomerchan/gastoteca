@@ -135,7 +135,19 @@ test('recorded transfers remain credited after an income cancels the original ex
   assert.equal(balance.netBalance.value, 0.01)
   assert.equal(balance.pairBalances.value[0].debtorUid, 'b')
   expenses.value.shift()
-  assert.equal(balance.netBalance.value, 0.01)
+  assert.equal(balance.netBalance.value, 0.30)
+})
+
+test('income surplus remains in the balance and expense confirmation changes it', () => {
+  const expenses = ref([
+    { transaction_type: 'expense', paid_by_type: 'person', paid_by_uid: 'b', participants: [{ uid: 'a', share_amount: 296 }] },
+    { transaction_type: 'expense', paid_by_type: 'person', paid_by_uid: 'a', participants: [{ uid: 'b', share_amount: 143.83 }] },
+    { transaction_type: 'income', paid_by_type: 'person', paid_by_uid: 'a', amount: 600, participants: [{ uid: 'b', share_amount: 600 }] },
+  ])
+  const balance = useBalances({ expenses, settlements: ref([]), user: ref({ uid: 'a' }) })
+  assert.equal(balance.netBalance.value, 447.83)
+  expenses.value[0].participants[0].share_amount = 268.43
+  assert.equal(balance.netBalance.value, 475.40)
 })
 
 test('calendar calculations use Madrid and clamp the previous month across month-end and leap years', () => {

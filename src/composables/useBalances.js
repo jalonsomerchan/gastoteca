@@ -43,7 +43,7 @@ export function useBalances({ expenses, settlements, user, serverPairBalances })
       })
     })
     incomeCredits.forEach((amount, key) => {
-      balances.set(key, Math.max(0, (balances.get(key) || 0) - amount))
+      balances.set(key, (balances.get(key) || 0) - amount)
     })
     // A recorded transfer must survive later expense edits or income credits.
     settlements.value.forEach((settlement) => {

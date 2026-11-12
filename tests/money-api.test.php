@@ -130,11 +130,18 @@ $storage->expenses = array(array_merge($base, array('id' => 3, 'transaction_type
 $storage->participants = array(array('expense_id' => 3, 'uid' => 'bob', 'share_amount' => 0.29));
 $storage->settlements = array(array_merge($settlement, array('amount' => 0.01)));
 $pairs = $pairsMethod->invoke($api, 1);
-check(count($pairs) === 1 && $pairs[0]['debtor_uid'] === 'bob' && $pairs[0]['amount'] === 0.01, 'Income must never erase a recorded transfer after the original expense is removed');
+check(count($pairs) === 1 && $pairs[0]['debtor_uid'] === 'bob' && $pairs[0]['amount'] === 0.30, 'Income surplus and recorded transfer must both remain after the original expense is removed');
 $storage->expenses = array(array_merge($base, array('id' => 1, 'transaction_type' => 'expense', 'amount' => 10, 'paid_by_uid' => 'bob')), array_merge($base, array('id' => 2, 'transaction_type' => 'income', 'amount' => 10, 'paid_by_uid' => 'alice')));
 $storage->participants = array(array('expense_id' => 1, 'uid' => 'alice', 'share_amount' => 10), array('expense_id' => 2, 'uid' => 'alice', 'share_amount' => 5), array('expense_id' => 2, 'uid' => 'bob', 'share_amount' => 5));
 $storage->settlements = array();
 $pairs = $pairsMethod->invoke($api, 1);
 check(count($pairs) === 1 && $pairs[0]['amount'] === 5, 'Recipient share must not be reassigned to other participants in income balances');
+$storage->expenses = array(array_merge($base, array('id' => 1, 'transaction_type' => 'expense', 'amount' => 296, 'paid_by_uid' => 'bob')), array_merge($base, array('id' => 2, 'transaction_type' => 'expense', 'amount' => 143.83, 'paid_by_uid' => 'alice')), array_merge($base, array('id' => 3, 'transaction_type' => 'income', 'amount' => 600, 'paid_by_uid' => 'alice')));
+$storage->participants = array(array('expense_id' => 1, 'uid' => 'alice', 'share_amount' => 296), array('expense_id' => 2, 'uid' => 'bob', 'share_amount' => 143.83), array('expense_id' => 3, 'uid' => 'bob', 'share_amount' => 600));
+$pairs = $pairsMethod->invoke($api, 1);
+check(count($pairs) === 1 && $pairs[0]['debtor_uid'] === 'bob' && $pairs[0]['amount'] === 447.83, 'Income surplus must carry into the reciprocal balance');
+$storage->participants[0]['share_amount'] = 268.43;
+$pairs = $pairsMethod->invoke($api, 1);
+check(count($pairs) === 1 && $pairs[0]['amount'] === 475.40, 'Removing a confirmed expense share must change the balance by its full amount');
 
 echo "Money parsing, 10,000 allocations, shares, write validation and exact balances passed.\n";
