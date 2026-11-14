@@ -11,6 +11,7 @@ import { localStatistics } from '../domain/offline.js'
 const {
   stats: globalStats,
   expenses,
+  group,
   category,
   memberLabel,
   paymentMethodLabel,
@@ -23,10 +24,13 @@ const datePreset = ref('all')
 const fromDate = ref('')
 const toDate = ref('')
 const appliedRange = ref(null)
+const selectedTag = ref('')
+const appliedTag = ref('')
 const stats = ref(globalStats.value)
 const maxCategoryTotal = computed(() => Math.max(1, ...stats.value.by_category.map(item => Number(item.total))))
 watch(globalStats, value => {
-  stats.value = appliedRange.value ? localStatistics(expenses.value, appliedRange.value) : value
+  if (appliedTag.value) stats.value = localStatistics(expenses.value.filter(expense => (expense.tags || []).includes(appliedTag.value)), appliedRange.value || {})
+  else stats.value = appliedRange.value ? localStatistics(expenses.value, appliedRange.value) : value
 })
 const filtering = ref(false)
 const filterError = ref('')
@@ -72,10 +76,14 @@ async function refreshStats() {
     }
     const token = await freshToken()
     const query = params.toString()
-    const result = await getJson(`gastoteca/statistics${query ? `?${query}` : ''}`, token)
-    if (requestId === filterRequestId && result.stats) {
-      stats.value = result.stats
+    const tag = selectedTag.value
+    const result = tag
+      ? await getJson('gastoteca/expenses', token)
+      : await getJson(`gastoteca/statistics${query ? `?${query}` : ''}`, token)
+    if (requestId === filterRequestId) {
+      stats.value = tag ? localStatistics((result.expenses || []).filter(expense => (expense.tags || []).includes(tag)), range || {}) : result.stats
       appliedRange.value = range
+      appliedTag.value = tag
     }
   } catch (reason) {
     if (requestId === filterRequestId) filterError.value = reason.message || 'No se pudieron cargar las estadísticas.'
@@ -110,6 +118,7 @@ async function openBreakdown(dimension, item) {
     const allExpenses = result.expenses || []
     breakdownExpenses.value = allExpenses
       .filter(expense => (expense.transaction_type || 'expense') === 'expense' && !expense.confirmation_pending)
+      .filter(expense => !appliedTag.value || (expense.tags || []).includes(appliedTag.value))
       .filter(expense => {
         const date = String(expense.occurred_at || '').slice(0, 10)
         return (!range?.from || date >= range.from) && (!range?.to || date <= range.to)
@@ -151,6 +160,71 @@ const titleStats = computed(() => (stats.value.by_title || []).map((item) => ({ 
 const establishmentStats = computed(() => (stats.value.by_establishment || []).map((item) => ({ ...item, key: item.establishment, label: item.establishment || 'Sin establecimiento' })))
 const participantStats = computed(() => (stats.value.by_participant || []).map((item) => ({ ...item, key: item.uid, label: memberLabel(item.uid) })))
 const paymentMethodStats = computed(() => (stats.value.by_payment_method || []).map((item) => ({ ...item, key: item.payment_method, label: paymentMethodLabel(item.payment_method) })))
+
+const reportLines = computed(() => {
+  const data = stats.value
+  const sections = [
+    ['Gasto por mes', data.monthly, item => monthLabel(item.month)],
+    ['En qué gastáis', data.by_category, item => category(item.category).label],
+    ['Gasto por título', data.by_title, item => item.title || 'Sin título'],
+    ['Dónde gastáis', data.by_establishment, item => item.establishment || 'Sin establecimiento'],
+    ['Quién ha pagado', data.by_member, item => item.uid ? memberLabel(item.uid) : 'Todo el grupo'],
+    ['Gasto asignado por persona', data.by_participant, item => memberLabel(item.uid)],
+    ['Cómo pagáis', data.by_payment_method, item => paymentMethodLabel(item.payment_method)],
+  ]
+  return [
+    'Estadísticas de gastos',
+    appliedRange.value ? `Periodo: ${appliedRange.value.from} al ${appliedRange.value.to}` : 'Periodo: todo el periodo',
+    `Etiqueta: ${appliedTag.value || 'Todas'}`,
+    '', `Gasto total: ${money(data.total)}`, `Gastos registrados: ${data.count}`,
+    `Este mes: ${money(data.current_month_total || 0)}`, `Media por gasto: ${money(data.average)}`,
+    ...sections.flatMap(([heading, items, label]) => ['', heading, ...(items?.length ? items.map(item => `${label(item)}: ${money(item.total)}`) : ['Sin datos'])]),
+  ]
+})
+
+function downloadFile(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function exportText() {
+  downloadFile(new Blob([reportLines.value.join('\n')], { type: 'text/plain;charset=utf-8' }), 'estadisticas.txt')
+}
+
+function exportImage() {
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d')
+  const width = 1000
+  context.font = '24px sans-serif'
+  const lines = reportLines.value.flatMap(line => {
+    if (!line) return ['']
+    const words = line.split(/\s+/)
+    const result = ['']
+    for (const word of words) {
+      const index = result.length - 1
+      const next = result[index] ? `${result[index]} ${word}` : word
+      if (context.measureText(next).width > width - 100 && result[index]) result.push(word)
+      else result[index] = next
+    }
+    return result
+  })
+  canvas.width = width
+  canvas.height = 100 + lines.length * 38
+  context.fillStyle = '#fafaf7'
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.fillStyle = '#292b25'
+  context.font = '24px sans-serif'
+  lines.forEach((line, index) => context.fillText(line, 50, 65 + index * 38, width - 100))
+  canvas.toBlob(blob => {
+    if (blob) downloadFile(blob, 'estadisticas.png')
+    else filterError.value = 'No se pudo generar la imagen.'
+  }, 'image/png')
+}
+
 </script>
 
 <template>
@@ -160,8 +234,12 @@ const paymentMethodStats = computed(() => (stats.value.by_payment_method || []).
         UNA MIRADA AL CONJUNTO
       </p><h1>Estadísticas</h1><p>Desglosa los gastos por categoría, nombre, establecimiento, persona y método de pago.</p>
     </div>
+    <div class="stats-export-actions" aria-label="Exportar estadísticas">
+      <button type="button" class="secondary" :disabled="filtering" @click="exportImage">Exportar imagen</button>
+      <button type="button" class="secondary" :disabled="filtering" @click="exportText">Exportar texto</button>
+    </div>
   </section>
-  <section class="stats-date-filter" aria-label="Filtrar estadísticas por fecha">
+  <section class="stats-date-filter" aria-label="Filtrar estadísticas">
     <label class="stats-date-preset"><span>Periodo</span><select v-model="datePreset" :disabled="filtering" @change="applyPreset">
       <option value="all">Todo el periodo</option>
       <option value="this-month">Este mes</option>
@@ -172,10 +250,14 @@ const paymentMethodStats = computed(() => (stats.value.by_payment_method || []).
     </select></label>
     <label><span>Desde</span><input v-model="fromDate" type="date" :max="toDate || undefined" :disabled="filtering" @change="applyCustomRange"></label>
     <label><span>Hasta</span><input v-model="toDate" type="date" :min="fromDate || undefined" :disabled="filtering" @change="applyCustomRange"></label>
+    <label><span>Etiqueta</span><select v-model="selectedTag" :disabled="filtering" @change="refreshStats">
+      <option value="">Todas las etiquetas</option>
+      <option v-for="tag in group?.tags || []" :key="tag.id" :value="tag.name">{{ tag.name }}</option>
+    </select></label>
     <span v-if="filtering" class="stats-filter-status" role="status">Actualizando…</span>
     <p v-if="datePreset === 'custom' && (!fromDate || !toDate)" class="stats-filter-hint">Selecciona las dos fechas para aplicar el filtro.</p>
     <p v-if="filterError" class="stats-filter-error" role="alert">{{ filterError }}</p>
-    <p class="stats-filter-hint">{{ appliedRange ? `Mostrando del ${appliedRange.from} al ${appliedRange.to}.` : 'Mostrando todo el periodo.' }}</p>
+    <p class="stats-filter-hint">{{ appliedRange ? `Mostrando del ${appliedRange.from} al ${appliedRange.to}.` : 'Mostrando todo el periodo.' }} {{ appliedTag ? `Etiqueta: ${appliedTag}.` : '' }}</p>
   </section>
   <section class="stats-overview" aria-label="Resumen de gastos">
     <article class="stats-overview-card"><span>Gasto total</span><strong>{{ money(stats.total) }}</strong><small>{{ stats.count }} {{ stats.count === 1 ? 'gasto registrado' : 'gastos registrados' }}</small></article>
